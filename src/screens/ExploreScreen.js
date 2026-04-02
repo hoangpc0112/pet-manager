@@ -5,10 +5,12 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import IconBadge from '../components/IconBadge';
 import theme from '../theme';
-import { exploreCards, recommendations } from '../data/explore';
+import { useAppData } from '../context/AppDataContext';
 
 const ExploreScreen = ({ navigation }) => {
-  const cards = exploreCards;
+  const { exploreCards, recommendations } = useAppData();
+  const cards = exploreCards || [];
+  const suggestionItems = recommendations || [];
 
   return (
     <Screen contentContainerStyle={styles.container}>
@@ -36,7 +38,7 @@ const ExploreScreen = ({ navigation }) => {
 
       <Text style={styles.sectionLabel}>GỢI Ý CHO BẠN</Text>
       <Card style={styles.recommendationCard}>
-        {recommendations.map((item, index) => (
+        {suggestionItems.map((item, index) => (
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.8}
@@ -58,7 +60,7 @@ const ExploreScreen = ({ navigation }) => {
                 <Ionicons name="star" size={12} color={theme.colors.warning} />
               </View>
             ) : null}
-            {index < recommendations.length - 1 ? <View style={styles.divider} /> : null}
+            {index < suggestionItems.length - 1 ? <View style={styles.divider} /> : null}
           </TouchableOpacity>
         ))}
       </Card>

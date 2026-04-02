@@ -7,7 +7,7 @@ import ListRow from '../components/ListRow';
 import PrimaryButton from '../components/PrimaryButton';
 import GhostButton from '../components/GhostButton';
 import theme from '../theme';
-import { placeDetail } from '../data/place';
+import { useAppData } from '../context/AppDataContext';
 
 const ActionButton = ({ icon, label, primary }) => {
   return (
@@ -19,7 +19,16 @@ const ActionButton = ({ icon, label, primary }) => {
 };
 
 const PlaceDetailScreen = ({ navigation, route }) => {
+  const { placeDetail } = useAppData();
   const detail = route?.params?.place || placeDetail;
+
+  if (!detail) {
+    return (
+      <Screen contentContainerStyle={styles.container}>
+        <Text style={styles.sectionLabel}>Chưa có dữ liệu địa điểm.</Text>
+      </Screen>
+    );
+  }
 
   return (
     <Screen contentContainerStyle={styles.container}>

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
-import { nearbyServices } from '../data/place';
+import { useAppData } from '../context/AppDataContext';
 
 const getServiceIcon = (type) => {
   if (type === 'Thú y') return 'medkit';
@@ -15,6 +15,9 @@ const getServiceIcon = (type) => {
 };
 
 const NearbyServicesScreen = ({ navigation }) => {
+  const { nearbyServices } = useAppData();
+  const services = nearbyServices || [];
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
@@ -24,9 +27,9 @@ const NearbyServicesScreen = ({ navigation }) => {
         <Text style={styles.headerTitle}>Dịch vụ gần tôi</Text>
       </View>
 
-      <Text style={styles.resultText}>{nearbyServices.length} dịch vụ quanh bạn</Text>
+      <Text style={styles.resultText}>{services.length} dịch vụ quanh bạn</Text>
 
-      {nearbyServices.map((place) => (
+      {services.map((place) => (
         <TouchableOpacity
           key={place.id}
           activeOpacity={0.9}

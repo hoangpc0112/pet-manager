@@ -1,10 +1,9 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
-import { petLogFormDefaults } from '../data/pets';
 import { useAppData } from '../context/AppDataContext';
 
 const categories = ['Sức khỏe', 'Dinh dưỡng', 'Vệ sinh', 'Vận động', 'Khác'];
@@ -19,7 +18,8 @@ const Field = ({ label, children }) => {
 };
 
 const PetNewLogScreen = ({ navigation, route }) => {
-  const { pets, saveJournalEntry } = useAppData();
+  const { pets, saveJournalEntry, petLogFormDefaults } = useAppData();
+  const formDefaults = petLogFormDefaults || {};
   const initialPetId = route?.params?.preselectedPetId || pets[0]?.id || '';
   const [title, setTitle] = useState('');
   const [petId, setPetId] = useState(initialPetId);
@@ -28,6 +28,12 @@ const PetNewLogScreen = ({ navigation, route }) => {
   const [note, setNote] = useState('');
 
   const selectedPet = useMemo(() => pets.find((item) => item.id === petId), [pets, petId]);
+
+  useEffect(() => {
+    if (!petId && pets.length > 0) {
+      setPetId(pets[0].id);
+    }
+  }, [pets, petId]);
 
   const handleSave = () => {
     if (!title.trim() || !note.trim() || !selectedPet) {
@@ -72,7 +78,7 @@ const PetNewLogScreen = ({ navigation, route }) => {
           <TextInput
             value={title}
             onChangeText={setTitle}
-            placeholder={petLogFormDefaults.titlePlaceholder}
+            placeholder={formDefaults.titlePlaceholder}
             placeholderTextColor={theme.colors.textLight}
             style={styles.fieldInput}
           />
@@ -110,7 +116,7 @@ const PetNewLogScreen = ({ navigation, route }) => {
           <TextInput
             value={date}
             onChangeText={setDate}
-            placeholder={petLogFormDefaults.dateValue}
+            placeholder={formDefaults.dateValue}
             placeholderTextColor={theme.colors.textLight}
             style={styles.fieldInput}
           />
@@ -121,7 +127,7 @@ const PetNewLogScreen = ({ navigation, route }) => {
           <TextInput
             value={note}
             onChangeText={setNote}
-            placeholder={petLogFormDefaults.notePlaceholder}
+            placeholder={formDefaults.notePlaceholder}
             placeholderTextColor={theme.colors.textLight}
             multiline
             style={[styles.fieldInput, styles.textArea]}

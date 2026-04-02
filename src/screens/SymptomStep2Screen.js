@@ -8,17 +8,23 @@ import Chip from '../components/Chip';
 import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
-import { symptomMeta, symptomOptions } from '../data/symptoms';
+import { useAppData } from '../context/AppDataContext';
 
 const SymptomStep2Screen = ({ navigation, route }) => {
-  const symptomList = symptomOptions;
-  const meta = symptomMeta;
+  const { symptomMeta, symptomOptions } = useAppData();
+  const symptomList = symptomOptions || [];
+  const meta = symptomMeta || {
+    duration: ['< 24h', '1-3 ngày', '> 3 ngày'],
+    energy: ['Thấp', 'Bình thường', 'Cao'],
+    appetite: ['Giảm', 'Bình thường', 'Tăng']
+  };
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
   const [duration, setDuration] = useState(meta.duration[1]);
   const [energy, setEnergy] = useState(meta.energy[1]);
   const [appetite, setAppetite] = useState(meta.appetite[0]);
   const [severity, setSeverity] = useState(3);
   const [symptomImageUri, setSymptomImageUri] = useState('');
+  const [symptomImageDataUri, setSymptomImageDataUri] = useState('');
 
   const basePayload = useMemo(
     () => ({
@@ -46,11 +52,14 @@ const SymptomStep2Screen = ({ navigation, route }) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
+      base64: true,
       quality: 0.8
     });
 
     if (!result.canceled && result.assets?.length) {
-      setSymptomImageUri(result.assets[0].uri || '');
+      const asset = result.assets[0];
+      setSymptomImageUri(asset.uri || '');
+      setSymptomImageDataUri(asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : '');
     }
   };
 
@@ -145,7 +154,13 @@ const SymptomStep2Screen = ({ navigation, route }) => {
           )}
         </TouchableOpacity>
         {symptomImageUri ? (
-          <TouchableOpacity style={styles.removeImageButton} onPress={() => setSymptomImageUri('')}>
+          <TouchableOpacity
+            style={styles.removeImageButton}
+            onPress={() => {
+              setSymptomImageUri('');
+              setSymptomImageDataUri('');
+            }}
+          >
             <Ionicons name="close-circle" size={18} color={theme.colors.danger} />
             <Text style={styles.removeImageText}>Xoá ảnh</Text>
           </TouchableOpacity>
@@ -162,7 +177,8 @@ const SymptomStep2Screen = ({ navigation, route }) => {
             energy,
             appetite,
             severity,
-            symptomImageUri: symptomImageUri || null
+            symptomImageUri: symptomImageUri || null,
+            symptomImageDataUri: symptomImageDataUri || null
           })
         }
         style={styles.primaryButton}

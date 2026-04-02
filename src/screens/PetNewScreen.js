@@ -5,7 +5,6 @@ import * as ImagePicker from 'expo-image-picker';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
-import { petNewFormDefaults } from '../data/pets';
 import { useAppData } from '../context/AppDataContext';
 
 const speciesOptions = [
@@ -26,7 +25,8 @@ const Field = ({ label, children }) => {
 };
 
 const PetNewScreen = ({ navigation }) => {
-  const { addPet } = useAppData();
+  const { addPet, petNewFormDefaults } = useAppData();
+  const formDefaults = petNewFormDefaults || {};
   const [name, setName] = useState('');
   const [species, setSpecies] = useState('dog');
   const [breed, setBreed] = useState('');
@@ -34,6 +34,8 @@ const PetNewScreen = ({ navigation }) => {
   const [birth, setBirth] = useState('');
   const [weight, setWeight] = useState('');
   const [imageUri, setImageUri] = useState('');
+  const [imageDataUri, setImageDataUri] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handlePickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -45,11 +47,14 @@ const PetNewScreen = ({ navigation }) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
+      base64: true,
       quality: 0.8
     });
 
     if (!result.canceled && result.assets?.length) {
-      setImageUri(result.assets[0].uri || '');
+      const asset = result.assets[0];
+      setImageUri(asset.uri || '');
+      setImageDataUri(asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : '');
     }
   };
 
@@ -59,6 +64,8 @@ const PetNewScreen = ({ navigation }) => {
       return;
     }
 
+    setIsSubmitting(true);
+
     addPet({
       name: name.trim(),
       breed: breed.trim(),
@@ -66,9 +73,10 @@ const PetNewScreen = ({ navigation }) => {
       gender,
       age: birth.trim() ? `Sinh: ${birth.trim()}` : 'Chưa rõ tuổi',
       weight: weight.trim() ? `${weight.trim()} kg` : 'Chưa rõ',
-      imageUrl: imageUri || undefined
+      imageUrl: imageDataUri || undefined
     });
 
+    setIsSubmitting(false);
     Alert.alert('Thành công', 'Đã thêm thú cưng mới.', [
       {
         text: 'Về danh sách',
@@ -88,8 +96,8 @@ const PetNewScreen = ({ navigation }) => {
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Thêm thú cưng</Text>
-        <TouchableOpacity onPress={handleSave}>
-          <Text style={styles.save}>Lưu</Text>
+        <TouchableOpacity onPress={handleSave} disabled={isSubmitting}>
+          <Text style={styles.save}>{isSubmitting ? 'Đang lưu...' : 'Lưu'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -105,7 +113,13 @@ const PetNewScreen = ({ navigation }) => {
           )}
         </TouchableOpacity>
         {imageUri ? (
-          <TouchableOpacity style={styles.removeImageButton} onPress={() => setImageUri('')}>
+          <TouchableOpacity
+            style={styles.removeImageButton}
+            onPress={() => {
+              setImageUri('');
+              setImageDataUri('');
+            }}
+          >
             <Ionicons name="close-circle" size={18} color={theme.colors.danger} />
             <Text style={styles.removeImageText}>Xoá ảnh</Text>
           </TouchableOpacity>
@@ -115,7 +129,7 @@ const PetNewScreen = ({ navigation }) => {
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder={petNewFormDefaults.namePlaceholder}
+            placeholder={formDefaults.namePlaceholder}
             placeholderTextColor={theme.colors.textLight}
             style={styles.fieldInput}
           />
@@ -141,7 +155,7 @@ const PetNewScreen = ({ navigation }) => {
           <TextInput
             value={breed}
             onChangeText={setBreed}
-            placeholder={petNewFormDefaults.breedPlaceholder}
+            placeholder={formDefaults.breedPlaceholder}
             placeholderTextColor={theme.colors.textLight}
             style={styles.fieldInput}
           />
@@ -165,7 +179,7 @@ const PetNewScreen = ({ navigation }) => {
           <TextInput
             value={birth}
             onChangeText={setBirth}
-            placeholder={petNewFormDefaults.birthPlaceholder}
+            placeholder={formDefaults.birthPlaceholder}
             placeholderTextColor={theme.colors.textLight}
             style={styles.fieldInput}
           />
@@ -175,7 +189,7 @@ const PetNewScreen = ({ navigation }) => {
           <TextInput
             value={weight}
             onChangeText={setWeight}
-            placeholder={petNewFormDefaults.weightPlaceholder}
+            placeholder={formDefaults.weightPlaceholder}
             placeholderTextColor={theme.colors.textLight}
             keyboardType="numeric"
             style={styles.fieldInput}

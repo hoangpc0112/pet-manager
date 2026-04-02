@@ -8,7 +8,7 @@ import { useAppData } from '../context/AppDataContext';
 
 const HomeScreen = ({ navigation }) => {
   const { pets, journalEntries, communityPosts } = useAppData();
-  const reviewCount = communityPosts.filter((post) => post.category === 'Review').length;
+  const reviewCount = communityPosts.filter((post) => (post.category || '').toLowerCase() === 'review').length;
 
   return (
     <Screen contentContainerStyle={styles.container}>

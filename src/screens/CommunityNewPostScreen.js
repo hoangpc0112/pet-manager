@@ -5,12 +5,9 @@ import * as ImagePicker from 'expo-image-picker';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
-import { newPostDefaults } from '../data/community';
 import { useAppData } from '../context/AppDataContext';
-import { nearbyServices } from '../data/place';
 
 const categories = ['Hỏi đáp', 'review', 'Mạng xã hội'];
-const servicePlaces = Array.from(new Set(nearbyServices.map((item) => item.name)));
 
 const Field = ({ label, children }) => {
   return (
@@ -22,13 +19,16 @@ const Field = ({ label, children }) => {
 };
 
 const CommunityNewPostScreen = ({ navigation }) => {
-  const { addCommunityPost } = useAppData();
+  const { addCommunityPost, newPostDefaults, nearbyServices } = useAppData();
+  const servicePlaces = Array.from(new Set((nearbyServices || []).map((item) => item.name)));
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState(newPostDefaults.category || 'Hỏi đáp');
+  const [category, setCategory] = useState(newPostDefaults?.category || 'Hỏi đáp');
   const [content, setContent] = useState('');
   const [servicePlace, setServicePlace] = useState('');
   const [reviewScore, setReviewScore] = useState(5);
   const [imageUri, setImageUri] = useState('');
+  const [imageDataUri, setImageDataUri] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const handlePickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -40,11 +40,14 @@ const CommunityNewPostScreen = ({ navigation }) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
+      base64: true,
       quality: 0.8
     });
 
     if (!result.canceled && result.assets?.length) {
-      setImageUri(result.assets[0].uri || '');
+      const asset = result.assets[0];
+      setImageUri(asset.uri || '');
+      setImageDataUri(asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : '');
     }
   };
 
@@ -59,16 +62,19 @@ const CommunityNewPostScreen = ({ navigation }) => {
       return;
     }
 
+    setIsPublishing(true);
+
     addCommunityPost({
       title: title.trim(),
       category,
       content: content.trim(),
-      imageUrl: imageUri || null,
+      imageUrl: imageDataUri || null,
       tags: [],
       location: category === 'Mạng xã hội' ? '' : servicePlace,
       reviewScore
     });
 
+    setIsPublishing(false);
     Alert.alert('Đã đăng', 'Bài viết đã được đăng lên cộng đồng.');
     navigation.goBack();
   };
@@ -80,8 +86,8 @@ const CommunityNewPostScreen = ({ navigation }) => {
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Tạo bài viết</Text>
-        <TouchableOpacity style={styles.publishButton} onPress={handlePublish}>
-          <Text style={styles.publish}>Đăng</Text>
+        <TouchableOpacity style={styles.publishButton} onPress={handlePublish} disabled={isPublishing}>
+          <Text style={styles.publish}>{isPublishing ? 'Đang đăng...' : 'Đăng'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -170,7 +176,13 @@ const CommunityNewPostScreen = ({ navigation }) => {
           {imageUri ? (
             <View style={styles.previewWrap}>
               <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="cover" />
-              <TouchableOpacity style={styles.removeImageButton} onPress={() => setImageUri('')}>
+              <TouchableOpacity
+                style={styles.removeImageButton}
+                onPress={() => {
+                  setImageUri('');
+                  setImageDataUri('');
+                }}
+              >
                 <Ionicons name="close-circle" size={18} color={theme.colors.danger} />
                 <Text style={styles.removeImageText}>Xoá ảnh</Text>
               </TouchableOpacity>

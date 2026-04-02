@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
@@ -7,12 +7,11 @@ import Chip from '../components/Chip';
 import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
-import { symptomGroups } from '../data/symptoms';
 import { useAppData } from '../context/AppDataContext';
 
 const SymptomStep1Screen = ({ navigation }) => {
-  const { pets } = useAppData();
-  const groups = symptomGroups;
+  const { pets, symptomGroups } = useAppData();
+  const groups = symptomGroups || [];
   const [selectedPetId, setSelectedPetId] = useState(pets[0]?.id || '');
   const [selectedGroupId, setSelectedGroupId] = useState(groups[0]?.id || '');
   const petImageSources = useMemo(
@@ -26,6 +25,18 @@ const SymptomStep1Screen = ({ navigation }) => {
     [pets]
   );
   const selectedPet = useMemo(() => pets.find((item) => item.id === selectedPetId), [pets, selectedPetId]);
+
+  useEffect(() => {
+    if (!selectedPetId && pets.length > 0) {
+      setSelectedPetId(pets[0].id);
+    }
+  }, [pets, selectedPetId]);
+
+  useEffect(() => {
+    if (!selectedGroupId && groups.length > 0) {
+      setSelectedGroupId(groups[0].id);
+    }
+  }, [groups, selectedGroupId]);
 
   return (
     <Screen contentContainerStyle={styles.container}>

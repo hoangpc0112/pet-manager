@@ -4,9 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
-import { reminderItems, reminderSummary } from '../data/reminders';
+import { useAppData } from '../context/AppDataContext';
 
 const RemindersScreen = () => {
+  const { reminderItems, reminderSummary } = useAppData();
+  const items = reminderItems || [];
+  const summary = reminderSummary || { today: 'Hôm nay', count: 0 };
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
@@ -15,16 +19,16 @@ const RemindersScreen = () => {
 
       <Card style={styles.summaryCard}>
         <View>
-          <Text style={styles.summaryLabel}>{reminderSummary.today}</Text>
+          <Text style={styles.summaryLabel}>{summary.today}</Text>
           <Text style={styles.summaryValue}>
-            {`${reminderSummary.count} lịch sắp tới`}
+            {`${summary.count} lịch sắp tới`}
           </Text>
         </View>
         <Ionicons name="notifications" size={22} color={theme.colors.primary} />
       </Card>
 
       <Text style={styles.sectionLabel}>LỊCH HÀNG NGÀY</Text>
-      {reminderItems.map((item) => (
+      {items.map((item) => (
         <Card key={item.id} style={styles.reminderCard}>
           <View style={styles.row}>
             <View>

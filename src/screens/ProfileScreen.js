@@ -5,9 +5,14 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import GhostButton from '../components/GhostButton';
 import theme from '../theme';
-import { profileOverview, profileSettings, profileStats } from '../data/profile';
+import { useAppData } from '../context/AppDataContext';
 
 const ProfileScreen = ({ onLogout }) => {
+  const { profileOverview, profileSettings, profileStats } = useAppData();
+  const overview = profileOverview || {};
+  const settings = profileSettings || [];
+  const stats = profileStats || [];
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
@@ -19,17 +24,17 @@ const ProfileScreen = ({ onLogout }) => {
           <Ionicons name="person" size={26} color={theme.colors.primary} />
         </View>
         <View style={styles.profileInfo}>
-          <Text style={styles.name}>{profileOverview.name}</Text>
-          <Text style={styles.meta}>{profileOverview.email}</Text>
-          <Text style={styles.meta}>{profileOverview.phone}</Text>
+          <Text style={styles.name}>{overview.name}</Text>
+          <Text style={styles.meta}>{overview.email}</Text>
+          <Text style={styles.meta}>{overview.phone}</Text>
         </View>
         <View style={styles.planBadge}>
-          <Text style={styles.planText}>{profileOverview.plan}</Text>
+          <Text style={styles.planText}>{overview.plan}</Text>
         </View>
       </Card>
 
       <View style={styles.statsRow}>
-        {profileStats.map((stat) => (
+        {stats.map((stat) => (
           <Card key={stat.id} style={styles.statCard}>
             <Text style={styles.statValue}>{stat.value}</Text>
             <Text style={styles.statLabel}>{stat.label}</Text>
@@ -38,7 +43,7 @@ const ProfileScreen = ({ onLogout }) => {
       </View>
 
       <Text style={styles.sectionLabel}>CÀI ĐẶT</Text>
-      {profileSettings.map((setting) => (
+      {settings.map((setting) => (
         <Card key={setting.id} style={styles.settingCard}>
           <View>
             <Text style={styles.settingLabel}>{setting.label}</Text>

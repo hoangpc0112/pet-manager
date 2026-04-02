@@ -8,7 +8,6 @@ import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import GhostButton from '../components/GhostButton';
 import theme from '../theme';
-import { resultSteps, resultWarnings } from '../data/symptoms';
 import { useAppData } from '../context/AppDataContext';
 
 const getRiskSummary = (severity, symptomCount) => {
@@ -31,11 +30,11 @@ const getRiskSummary = (severity, symptomCount) => {
 };
 
 const SymptomResultScreen = ({ navigation, route }) => {
-  const { saveJournalEntry } = useAppData();
+  const { saveJournalEntry, resultSteps, resultWarnings } = useAppData();
   const payload = route?.params || {};
   const summary = getRiskSummary(payload.severity || 1, (payload.symptoms || []).length);
-  const steps = resultSteps;
-  const warnings = resultWarnings;
+  const steps = resultSteps || [];
+  const warnings = resultWarnings || [];
 
   const handleSaveToJournal = () => {
     saveJournalEntry({
@@ -43,7 +42,8 @@ const SymptomResultScreen = ({ navigation, route }) => {
       pet: payload.selectedPetName || 'Chưa chọn',
       date: new Date().toLocaleDateString('vi-VN'),
       note: `Triệu chứng: ${(payload.symptoms || []).join(', ') || 'Chưa có'} | Mức độ: ${payload.severity || 1}/5 | Đánh giá: ${summary.riskBadge}`,
-      category: 'Sức khỏe'
+      category: 'Sức khỏe',
+      imageUrl: payload?.symptomImageDataUri || null
     });
 
     Alert.alert('Đã lưu', 'Bản ghi đã được lưu vào Nhật ký.', [

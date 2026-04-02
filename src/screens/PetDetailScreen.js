@@ -4,12 +4,21 @@ import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
-import { petDetail, petQuickActions } from '../data/pets';
 import { useAppData } from '../context/AppDataContext';
 
 const PetDetailScreen = ({ navigation, route }) => {
-  const { getPetById, journalEntries } = useAppData();
-  const selectedPet = getPetById(route?.params?.petId) || petDetail;
+  const { getPetById, journalEntries, pets, petQuickActions } = useAppData();
+  const quickActions = petQuickActions || [];
+  const selectedPet = getPetById(route?.params?.petId) || pets[0] || null;
+
+  if (!selectedPet) {
+    return (
+      <Screen contentContainerStyle={styles.container}>
+        <Text style={styles.sectionLabel}>Chưa có thú cưng nào.</Text>
+      </Screen>
+    );
+  }
+
   const petLogs = journalEntries.filter((entry) => entry.pet === selectedPet.name);
   const analysisLogs = petLogs.filter(
     (entry) => entry.category === 'Sức khỏe' || entry.title.toLowerCase().includes('triệu chứng')
@@ -36,7 +45,7 @@ const PetDetailScreen = ({ navigation, route }) => {
 
       <Text style={styles.sectionLabel}>THAO TÁC NHANH</Text>
       <Card style={styles.card}>
-        {petQuickActions.map((action, index) => (
+        {quickActions.map((action, index) => (
           <TouchableOpacity
             key={action.id}
             onPress={() => {
@@ -44,7 +53,7 @@ const PetDetailScreen = ({ navigation, route }) => {
               if (action.id === 'reminder') navigation.navigate('Tabs', { screen: 'Reminders' });
               if (action.id === 'vaccine') navigation.navigate('PetVaccines');
             }}
-            style={[styles.actionRow, index === petQuickActions.length - 1 && styles.lastRow]}
+            style={[styles.actionRow, index === quickActions.length - 1 && styles.lastRow]}
           >
             <View style={styles.actionIcon}>
               <Ionicons name={action.icon} size={18} color={theme.colors.primary} />

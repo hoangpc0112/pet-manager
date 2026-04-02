@@ -4,9 +4,16 @@ import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
-import { petSwitcher } from '../data/pets';
+import { useAppData } from '../context/AppDataContext';
 
 const PetSwitcherScreen = ({ navigation }) => {
+  const { pets, petSwitcher } = useAppData();
+  const fallbackSwitcher = (pets || []).map((pet, index) => ({
+    ...pet,
+    selected: index === 0
+  }));
+  const switcherList = (petSwitcher && petSwitcher.length > 0 ? petSwitcher : fallbackSwitcher) || [];
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
@@ -17,8 +24,8 @@ const PetSwitcherScreen = ({ navigation }) => {
       </View>
 
       <Card style={styles.card}>
-        {petSwitcher.map((pet, index) => (
-          <View key={pet.id} style={[styles.row, index === petSwitcher.length - 1 && styles.lastRow]}>
+        {switcherList.map((pet, index) => (
+          <View key={pet.id} style={[styles.row, index === switcherList.length - 1 && styles.lastRow]}>
             <View style={styles.iconBox}>
               <Ionicons name="paw" size={20} color={theme.colors.primary} />
             </View>

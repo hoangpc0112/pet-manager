@@ -5,11 +5,12 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import Chip from '../components/Chip';
 import theme from '../theme';
-import { shopItems, shopTabs } from '../data/shop';
+import { useAppData } from '../context/AppDataContext';
 
 const ShopScreen = ({ navigation }) => {
-  const tabs = shopTabs;
-  const items = shopItems;
+  const { shopTabs, shopItems } = useAppData();
+  const tabs = shopTabs || [];
+  const items = shopItems || [];
 
   return (
     <Screen contentContainerStyle={styles.container}>

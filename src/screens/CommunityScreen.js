@@ -5,12 +5,11 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import Chip from '../components/Chip';
 import theme from '../theme';
-import { communityTabs } from '../data/community';
 import { useAppData } from '../context/AppDataContext';
 
 const CommunityScreen = ({ navigation }) => {
-  const { communityPosts } = useAppData();
-  const tabs = communityTabs;
+  const { communityPosts, communityTabs } = useAppData();
+  const tabs = communityTabs || [];
   const [activeTab, setActiveTab] = useState('Hỏi đáp');
   const [keyword, setKeyword] = useState('');
 

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
-import { vaccinationTabs, vaccinations } from '../data/pets';
+import { useAppData } from '../context/AppDataContext';
 
 const getStatusStyle = (status) => {
   if (status === 'overdue') {
@@ -22,6 +22,10 @@ const getStatusStyle = (status) => {
 };
 
 const PetVaccinesScreen = ({ navigation }) => {
+  const { vaccinationTabs, vaccinations } = useAppData();
+  const tabs = vaccinationTabs || [];
+  const vaccineItems = vaccinations || [];
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
@@ -35,14 +39,14 @@ const PetVaccinesScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.tabRow}>
-        {vaccinationTabs.map((tab, index) => (
+        {tabs.map((tab, index) => (
           <TouchableOpacity key={tab} style={[styles.tab, index === 0 && styles.tabActive]}>
             <Text style={[styles.tabText, index === 0 && styles.tabTextActive]}>{tab}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {vaccinations.map((item) => {
+      {vaccineItems.map((item) => {
         const status = getStatusStyle(item.status);
         return (
           <Card key={item.id} style={styles.card}>

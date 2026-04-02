@@ -1,24 +1,40 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import theme from '../theme';
 
 const Screen = ({ children, scroll = true, contentContainerStyle, style }) => {
   if (!scroll) {
     return (
       <SafeAreaView style={[styles.safe, style]}>
-        <View style={contentContainerStyle}>{children}</View>
+        <KeyboardAvoidingView
+          style={styles.keyboardWrap}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+        >
+          <View style={[styles.fixedContent, contentContainerStyle]}>{children}</View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={[styles.safe, style]}>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardWrap}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
       >
-        {children}
-      </ScrollView>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+        >
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -28,8 +44,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background
   },
+  keyboardWrap: {
+    flex: 1
+  },
   scrollContent: {
+    flexGrow: 1,
+    paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.xxl
+  },
+  fixedContent: {
+    flex: 1,
+    paddingTop: theme.spacing.md
   }
 });
 

@@ -1,4 +1,5 @@
-import React from 'react';
+﻿import React from 'react';
+import { Alert } from 'react-native';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
@@ -7,36 +8,82 @@ import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import GhostButton from '../components/GhostButton';
 import theme from '../theme';
-import { resultSteps, resultWarnings } from '../data/assistant';
+import { resultSteps, resultWarnings } from '../data/symptoms';
+import { useAppData } from '../context/AppDataContext';
 
-const SymptomResultScreen = ({ navigation }) => {
+const getRiskSummary = (severity, symptomCount) => {
+  if (severity >= 4 || symptomCount >= 4) {
+    return {
+      riskTitle: 'Nguy cơ cao, nên liên hệ phòng khám sớm',
+      riskBadge: 'Cao'
+    };
+  }
+  if (severity === 3 || symptomCount >= 2) {
+    return {
+      riskTitle: 'Cần theo dõi sát trong 24 giờ tới',
+      riskBadge: 'Theo dõi'
+    };
+  }
+  return {
+    riskTitle: 'Mức độ nhẹ, tiếp tục theo dõi tại nhà',
+    riskBadge: 'Nhẹ'
+  };
+};
+
+const SymptomResultScreen = ({ navigation, route }) => {
+  const { saveJournalEntry } = useAppData();
+  const payload = route?.params || {};
+  const summary = getRiskSummary(payload.severity || 1, (payload.symptoms || []).length);
+  const steps = resultSteps;
+  const warnings = resultWarnings;
+
+  const handleSaveToJournal = () => {
+    saveJournalEntry({
+      title: `Theo dõi triệu chứng - ${payload.selectedGroupLabel || 'Khác'}`,
+      pet: payload.selectedPetName || 'Chưa chọn',
+      date: new Date().toLocaleDateString('vi-VN'),
+      note: `Triệu chứng: ${(payload.symptoms || []).join(', ') || 'Chưa có'} | Mức độ: ${payload.severity || 1}/5 | Đánh giá: ${summary.riskBadge}`,
+      category: 'Sức khỏe'
+    });
+
+    Alert.alert('Đã lưu', 'Bản ghi đã được lưu vào Nhật ký.', [
+      {
+        text: 'Xem Nhật ký',
+        onPress: () => navigation.navigate('Tabs', { screen: 'Journal' })
+      },
+      {
+        text: 'Ở lại',
+        style: 'cancel'
+      }
+    ]);
+  };
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>Quay lại</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Kết quả phân tích</Text>
       </View>
 
       <Text style={styles.stepLabel}>Bước 4/4</Text>
-      <Text style={styles.stepTitle}>Đánh giá mức độ và hướng xử lý</Text>
+      <Text style={styles.stepTitle}>Đánh giá tình trạng và hướng xử lý</Text>
       <ProgressSteps total={4} current={4} />
 
       <Card style={styles.card}>
         <Text style={styles.cardLabel}>Mức rủi ro hiện tại</Text>
         <View style={styles.riskRow}>
-          <Text style={styles.riskText}>Nên theo dõi sát trong 24 giờ</Text>
+          <Text style={styles.riskText}>{summary.riskTitle}</Text>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>Rủi ro trung bình</Text>
+            <Text style={styles.badgeText}>{summary.riskBadge}</Text>
           </View>
         </View>
       </Card>
 
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Bước tiếp theo</Text>
-        {resultSteps.map((step) => (
+        {steps.map((step) => (
           <View key={step} style={styles.listRow}>
             <View style={styles.dot} />
             <Text style={styles.listText}>{step}</Text>
@@ -49,7 +96,7 @@ const SymptomResultScreen = ({ navigation }) => {
           <Ionicons name="warning" size={18} color={theme.colors.danger} />
           <Text style={styles.warningTitle}>Dấu hiệu cần đi khám ngay</Text>
         </View>
-        {resultWarnings.map((warn) => (
+        {warnings.map((warn) => (
           <View key={warn} style={styles.listRow}>
             <View style={[styles.dot, styles.dotDanger]} />
             <Text style={styles.listText}>{warn}</Text>
@@ -57,13 +104,13 @@ const SymptomResultScreen = ({ navigation }) => {
         ))}
       </Card>
 
-      <PrimaryButton label="Lưu vào nhật ký" onPress={() => {}} style={styles.primaryButton} />
-      <GhostButton label="Tạo nhắc nhở" onPress={() => {}} style={styles.ghostButton} />
-      <GhostButton label="Tạo tóm tắt khám thú y" onPress={() => {}} />
-
-      <View style={styles.noteCard}>
-        <Text style={styles.note}>Gợi ý tham khảo, không thay thế tư vấn thú y.</Text>
-      </View>
+      <PrimaryButton label="Lưu vào nhật ký" onPress={handleSaveToJournal} style={styles.primaryButton} />
+      <GhostButton
+        label="Tạo nhắc nhở"
+        onPress={() => navigation.navigate('Tabs', { screen: 'Reminders' })}
+        style={styles.ghostButton}
+      />
+      <GhostButton label="Quay về danh sách thú cưng" onPress={() => navigation.navigate('Tabs', { screen: 'Pets' })} />
     </Screen>
   );
 };
@@ -179,17 +226,15 @@ const styles = StyleSheet.create({
   ghostButton: {
     marginTop: theme.spacing.md
   },
-  noteCard: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 16,
-    paddingVertical: 12,
-    marginTop: theme.spacing.lg
-  },
-  note: {
-    ...theme.typography.caption,
+  loading: {
+    ...theme.typography.body,
     color: theme.colors.textMuted,
-    textAlign: 'center'
+    marginTop: theme.spacing.md
   }
 });
 
 export default SymptomResultScreen;
+
+
+
+

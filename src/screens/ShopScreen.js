@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
@@ -8,12 +8,14 @@ import theme from '../theme';
 import { shopItems, shopTabs } from '../data/shop';
 
 const ShopScreen = ({ navigation }) => {
+  const tabs = shopTabs;
+  const items = shopItems;
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>Quay lại</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cửa hàng</Text>
       </View>
@@ -24,12 +26,12 @@ const ShopScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.tabRow}>
-        {shopTabs.map((tab, index) => (
+        {tabs.map((tab, index) => (
           <Chip key={tab} label={tab} active={index === 0} style={styles.tabChip} />
         ))}
       </View>
 
-      {shopItems.map((item) => (
+      {items.map((item) => (
         <Card key={item.id} style={styles.itemCard}>
           <Text style={styles.itemCategory}>{item.category}</Text>
           <Text style={styles.itemTitle}>{item.title}</Text>
@@ -133,7 +135,16 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: theme.colors.text,
     marginRight: 6
+  },
+  loading: {
+    ...theme.typography.body,
+    color: theme.colors.textMuted,
+    marginTop: theme.spacing.md
   }
 });
 
 export default ShopScreen;
+
+
+
+

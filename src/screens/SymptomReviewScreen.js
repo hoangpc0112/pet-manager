@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
@@ -8,13 +8,22 @@ import PrimaryButton from '../components/PrimaryButton';
 import GhostButton from '../components/GhostButton';
 import theme from '../theme';
 
-const SymptomReviewScreen = ({ navigation }) => {
+const SymptomReviewScreen = ({ navigation, route }) => {
+  const review = {
+    petName: route?.params?.selectedPetName || 'Chưa chọn',
+    group: route?.params?.selectedGroupLabel || 'Chưa chọn',
+    symptoms: route?.params?.symptoms || [],
+    duration: route?.params?.duration || 'Chưa chọn',
+    severity: route?.params?.severity || 1,
+    appetite: route?.params?.appetite || 'Chưa chọn',
+    energy: route?.params?.energy || 'Chưa chọn'
+  };
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>Quay lại</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Kiểm tra triệu chứng</Text>
       </View>
@@ -25,27 +34,29 @@ const SymptomReviewScreen = ({ navigation }) => {
 
       <Card style={styles.card}>
         <Text style={styles.itemLabel}>Thú cưng</Text>
-        <Text style={styles.itemValue}>Luna</Text>
+        <Text style={styles.itemValue}>{review.petName}</Text>
 
         <Text style={styles.itemLabel}>Nhóm vấn đề</Text>
-        <Text style={styles.itemValue}>Tiêu hóa</Text>
+        <Text style={styles.itemValue}>{review.group}</Text>
 
         <Text style={styles.itemLabel}>Triệu chứng</Text>
-        <Text style={styles.itemValue}>Nôn, Chán ăn</Text>
+        <Text style={styles.itemValue}>{(review.symptoms || []).join(', ')}</Text>
 
         <Text style={styles.itemLabel}>Thời gian kéo dài</Text>
-        <Text style={styles.itemValue}>1-3 ngày</Text>
+        <Text style={styles.itemValue}>{review.duration}</Text>
 
         <Text style={styles.itemLabel}>Mức độ nghiêm trọng</Text>
-        <Text style={styles.itemValue}>3/5</Text>
+        <Text style={styles.itemValue}>{review.severity}/5</Text>
+
+        <Text style={styles.itemLabel}>Khẩu vị</Text>
+        <Text style={styles.itemValue}>{review.appetite}</Text>
+
+        <Text style={styles.itemLabel}>Năng lượng</Text>
+        <Text style={styles.itemValue}>{review.energy}</Text>
       </Card>
 
       <GhostButton label="Chỉnh sửa thông tin" onPress={() => navigation.goBack()} style={styles.ghost} />
-      <View style={styles.noteCard}>
-        <Text style={styles.note}>Gợi ý tham khảo, không thay thế tư vấn thú y.</Text>
-      </View>
-
-      <PrimaryButton label="Phân tích ngay" onPress={() => navigation.navigate('SymptomResult')} />
+      <PrimaryButton label="Xem kết quả" onPress={() => navigation.navigate('SymptomResult', route?.params)} />
     </Screen>
   );
 };
@@ -101,18 +112,15 @@ const styles = StyleSheet.create({
   ghost: {
     marginTop: theme.spacing.lg
   },
-  noteCard: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 16,
-    paddingVertical: 12,
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.lg
-  },
-  note: {
-    ...theme.typography.caption,
+  loading: {
+    ...theme.typography.body,
     color: theme.colors.textMuted,
-    textAlign: 'center'
+    marginTop: theme.spacing.md
   }
 });
 
 export default SymptomReviewScreen;
+
+
+
+

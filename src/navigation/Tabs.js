@@ -2,7 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../theme';
-import AssistantHomeScreen from '../screens/AssistantHomeScreen';
+import HomeScreen from '../screens/HomeScreen';
 import ExploreScreen from '../screens/ExploreScreen';
 import PetsScreen from '../screens/PetsScreen';
 import JournalScreen from '../screens/JournalScreen';
@@ -11,7 +11,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
-const Tabs = () => {
+const Tabs = ({ onLogout }) => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -39,12 +39,14 @@ const Tabs = () => {
         }
       })}
     >
-      <Tab.Screen name="Home" component={AssistantHomeScreen} options={{ tabBarLabel: 'Trang chủ' }} />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Trang chủ' }} />
       <Tab.Screen name="Explore" component={ExploreScreen} options={{ tabBarLabel: 'Khám phá' }} />
       <Tab.Screen name="Pets" component={PetsScreen} options={{ tabBarLabel: 'Thú cưng' }} />
       <Tab.Screen name="Journal" component={JournalScreen} options={{ tabBarLabel: 'Nhật ký' }} />
       <Tab.Screen name="Reminders" component={RemindersScreen} options={{ tabBarLabel: 'Nhắc nhở' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Hồ sơ' }} />
+      <Tab.Screen name="Profile" options={{ tabBarLabel: 'Hồ sơ' }}>
+        {(props) => <ProfileScreen {...props} onLogout={onLogout} />}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 };

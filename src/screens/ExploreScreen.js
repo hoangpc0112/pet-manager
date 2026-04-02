@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
@@ -8,18 +8,20 @@ import theme from '../theme';
 import { exploreCards, recommendations } from '../data/explore';
 
 const ExploreScreen = ({ navigation }) => {
+  const cards = exploreCards;
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <Text style={styles.header}>Khám phá</Text>
 
-      {exploreCards.map((card) => (
+      {cards.map((card) => (
         <TouchableOpacity
           key={card.id}
           activeOpacity={0.9}
           onPress={() => {
             if (card.id === 'community') navigation.navigate('Community');
             if (card.id === 'shop') navigation.navigate('Shop');
-            if (card.id === 'nearby') navigation.navigate('PlaceDetail');
+            if (card.id === 'nearby') navigation.navigate('NearbyServices');
           }}
         >
           <Card style={styles.card}>
@@ -67,11 +69,6 @@ const ExploreScreen = ({ navigation }) => {
           Gợi ý được cá nhân hoá theo hồ sơ thú cưng, lịch nhắc nhở và vị trí bạn thường dùng.
         </Text>
       </View>
-
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9}>
-        <Ionicons name="sparkles" size={18} color="#FFFFFF" />
-        <Text style={styles.fabLabel}>Trợ lý AI</Text>
-      </TouchableOpacity>
     </Screen>
   );
 };
@@ -79,7 +76,7 @@ const ExploreScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     padding: theme.spacing.lg,
-    paddingBottom: 120
+    paddingBottom: 120,
   },
   header: {
     ...theme.typography.h1,
@@ -167,22 +164,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1
   },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 24,
-    backgroundColor: theme.colors.card,
-    borderRadius: 26,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    ...theme.shadow.card
-  },
-  fabLabel: {
-    color: theme.colors.text,
-    fontWeight: '600',
-    marginLeft: 6
+  loading: {
+    ...theme.typography.body,
+    color: theme.colors.textMuted
   }
 });
 

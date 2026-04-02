@@ -1,60 +1,182 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+﻿import React, { useState } from 'react';
+import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
 import { newPostDefaults } from '../data/community';
+import { useAppData } from '../context/AppDataContext';
+import { nearbyServices } from '../data/place';
 
-const Field = ({ label, placeholder }) => {
+const categories = ['Hỏi đáp', 'review', 'Mạng xã hội'];
+const servicePlaces = Array.from(new Set(nearbyServices.map((item) => item.name)));
+
+const Field = ({ label, children }) => {
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.fieldLabel}>{label} <Text style={styles.required}>*</Text></Text>
-      <View style={styles.fieldInput}>
-        <Text style={styles.fieldPlaceholder}>{placeholder}</Text>
-      </View>
+      {children}
     </View>
   );
 };
 
 const CommunityNewPostScreen = ({ navigation }) => {
+  const { addCommunityPost } = useAppData();
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState(newPostDefaults.category || 'Hỏi đáp');
+  const [content, setContent] = useState('');
+  const [servicePlace, setServicePlace] = useState('');
+  const [reviewScore, setReviewScore] = useState(5);
+  const [imageUri, setImageUri] = useState('');
+
+  const handlePickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để chọn ảnh.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8
+    });
+
+    if (!result.canceled && result.assets?.length) {
+      setImageUri(result.assets[0].uri || '');
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!title.trim() || !content.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề và nội dung.');
+      return;
+    }
+
+    if (category !== 'Mạng xã hội' && !servicePlace) {
+      Alert.alert('Thiếu thông tin', 'Bài viết cần chọn 1 địa điểm dịch vụ.');
+      return;
+    }
+
+    addCommunityPost({
+      title: title.trim(),
+      category,
+      content: content.trim(),
+      imageUrl: imageUri || null,
+      tags: [],
+      location: category === 'Mạng xã hội' ? '' : servicePlace,
+      reviewScore
+    });
+
+    Alert.alert('Đã đăng', 'Bài viết đã được đăng lên cộng đồng.');
+    navigation.goBack();
+  };
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>Quay lại</Text>
         </TouchableOpacity>
-        <TouchableOpacity>
+        <Text style={styles.headerTitle}>Tạo bài viết</Text>
+        <TouchableOpacity style={styles.publishButton} onPress={handlePublish}>
           <Text style={styles.publish}>Đăng</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.header}>Tạo bài viết</Text>
-
       <Card style={styles.card}>
-        <Field label="Tiêu đề" placeholder="Nhập tiêu đề bài viết" />
+        <Field label="Tiêu đề">
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Nhập tiêu đề bài viết"
+            placeholderTextColor={theme.colors.textLight}
+            style={styles.fieldInput}
+          />
+        </Field>
+
         <View style={styles.fieldBlock}>
           <Text style={styles.fieldLabel}>Danh mục <Text style={styles.required}>*</Text></Text>
-          <View style={styles.selectInput}>
-            <Text style={styles.fieldPlaceholder}>{newPostDefaults.category}</Text>
-            <Ionicons name="chevron-down" size={18} color={theme.colors.textLight} />
+          <View style={styles.choiceRow}>
+            {categories.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[styles.choiceChip, category === item && styles.choiceChipActive]}
+                onPress={() => setCategory(item)}
+              >
+                <Text style={[styles.choiceText, category === item && styles.choiceTextActive]}>{item === 'review' ? 'Review' : item}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
+
+        {category !== 'Mạng xã hội' ? (
+          <>
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Địa điểm dịch vụ <Text style={styles.required}>*</Text></Text>
+              <View style={styles.choiceRow}>
+                {servicePlaces.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.choiceChip, servicePlace === item && styles.choiceChipActive]}
+                    onPress={() => setServicePlace(item)}
+                  >
+                    <Text style={[styles.choiceText, servicePlace === item && styles.choiceTextActive]}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {category === 'review' ? (
+              <View style={styles.fieldBlock}>
+                <Text style={styles.fieldLabel}>Điểm đánh giá <Text style={styles.required}>*</Text></Text>
+                <View style={styles.choiceRow}>
+                  {[1, 2, 3, 4, 5].map((score) => (
+                    <TouchableOpacity
+                      key={score}
+                      style={[styles.scoreChip, reviewScore === score && styles.scoreChipActive]}
+                      onPress={() => setReviewScore(score)}
+                    >
+                      <Text style={[styles.choiceText, reviewScore === score && styles.choiceTextActive]}>{score}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+          </>
+        ) : null}
+
         <View style={styles.fieldBlock}>
           <Text style={styles.fieldLabel}>Nội dung <Text style={styles.required}>*</Text></Text>
-          <View style={[styles.fieldInput, styles.textArea]}>
-            <Text style={styles.fieldPlaceholder}>Mô tả chi tiết để cộng đồng hỗ trợ tốt hơn</Text>
-          </View>
+          <TextInput
+            value={content}
+            onChangeText={setContent}
+            placeholder="Mô tả chi tiết để cộng đồng hỗ trợ tốt hơn"
+            placeholderTextColor={theme.colors.textLight}
+            multiline
+            style={[styles.fieldInput, styles.textArea]}
+            textAlignVertical="top"
+          />
         </View>
+
         <View style={styles.fieldBlock}>
-          <Text style={styles.fieldLabel}>Tag</Text>
-          <View style={styles.fieldInput}>
-            <Text style={styles.fieldPlaceholder}>Ví dụ: grooming, tiêm chủng</Text>
-          </View>
-          <Text style={styles.helper}>Có thể nhập nhiều tag, cách nhau bởi dấu phẩy.</Text>
+          <Text style={styles.fieldLabel}>Ảnh đính kèm</Text>
+          <TouchableOpacity style={styles.imagePicker} onPress={handlePickImage}>
+            <Ionicons name="image" size={18} color={theme.colors.primary} />
+            <Text style={styles.imagePickerText}>{imageUri ? 'Đổi ảnh' : 'Chọn ảnh từ thư viện'}</Text>
+          </TouchableOpacity>
+
+          {imageUri ? (
+            <View style={styles.previewWrap}>
+              <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="cover" />
+              <TouchableOpacity style={styles.removeImageButton} onPress={() => setImageUri('')}>
+                <Ionicons name="close-circle" size={18} color={theme.colors.danger} />
+                <Text style={styles.removeImageText}>Xoá ảnh</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
-        <Field label="Khu vực" placeholder="Ví dụ: Quận 3, TP.HCM" />
       </Card>
     </Screen>
   );
@@ -71,8 +193,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between'
   },
   back: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  headerTitle: {
+    ...theme.typography.h3,
+    flex: 1,
+    textAlign: 'center',
+    color: theme.colors.text,
+    marginHorizontal: theme.spacing.sm
+  },
+  publishButton: {
+    minWidth: 48,
+    alignItems: 'flex-end'
   },
   backText: {
     color: theme.colors.primary,
@@ -83,14 +220,9 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '600'
   },
-  header: {
-    ...theme.typography.h2,
-    color: theme.colors.text,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.lg
-  },
   card: {
-    padding: theme.spacing.lg
+    padding: theme.spacing.lg,
+    marginTop: theme.spacing.md
   },
   fieldBlock: {
     marginBottom: theme.spacing.lg
@@ -107,28 +239,97 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderRadius: 14,
     padding: 14,
-    marginTop: 8
-  },
-  selectInput: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 14,
-    padding: 14,
     marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between'
+    color: theme.colors.text
   },
-  fieldPlaceholder: {
-    color: theme.colors.textLight
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    gap: 8
+  },
+  choiceChip: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF'
+  },
+  choiceChipActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySoft
+  },
+  scoreChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF'
+  },
+  scoreChipActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySoft
+  },
+  choiceText: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted
+  },
+  choiceTextActive: {
+    color: theme.colors.primary,
+    fontWeight: '700'
   },
   textArea: {
     height: 140
   },
-  helper: {
+  imagePicker: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  imagePickerText: {
+    ...theme.typography.caption,
+    color: theme.colors.primary,
+    fontWeight: '600',
+    marginLeft: 8
+  },
+  previewWrap: {
+    marginTop: 10
+  },
+  previewImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 14
+  },
+  removeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 8
+  },
+  removeImageText: {
     ...theme.typography.small,
-    color: theme.colors.textLight,
-    marginTop: 6
+    color: theme.colors.danger,
+    marginLeft: 4,
+    fontWeight: '600'
+  },
+  loading: {
+    ...theme.typography.body,
+    color: theme.colors.textMuted,
+    marginBottom: theme.spacing.md
   }
 });
 
 export default CommunityNewPostScreen;
+
+
+

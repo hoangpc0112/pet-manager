@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+﻿import React, { useMemo, useState } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
@@ -7,15 +7,31 @@ import Chip from '../components/Chip';
 import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
-import { pets, symptomGroups } from '../data/assistant';
+import { symptomGroups } from '../data/symptoms';
+import { useAppData } from '../context/AppDataContext';
 
 const SymptomStep1Screen = ({ navigation }) => {
+  const { pets } = useAppData();
+  const groups = symptomGroups;
+  const [selectedPetId, setSelectedPetId] = useState(pets[0]?.id || '');
+  const [selectedGroupId, setSelectedGroupId] = useState(groups[0]?.id || '');
+  const petImageSources = useMemo(
+    () =>
+      pets.reduce((acc, pet) => {
+        if (pet.imageUrl) {
+          acc[pet.id] = { uri: pet.imageUrl, cache: 'force-cache' };
+        }
+        return acc;
+      }, {}),
+    [pets]
+  );
+  const selectedPet = useMemo(() => pets.find((item) => item.id === selectedPetId), [pets, selectedPetId]);
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>Quay lại</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Kiểm tra triệu chứng</Text>
       </View>
@@ -26,33 +42,57 @@ const SymptomStep1Screen = ({ navigation }) => {
 
       <Card style={styles.card}>
         {pets.map((pet) => (
-          <View key={pet.id} style={styles.petRow}>
-            <View style={styles.petIcon}>
-              <Ionicons name="paw" size={20} color={theme.colors.primary} />
+          <TouchableOpacity
+            key={pet.id}
+            style={[styles.petRow, selectedPetId === pet.id && styles.petRowSelected]}
+            onPress={() => setSelectedPetId(pet.id)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.petIcon, selectedPetId === pet.id && styles.petIconSelected]}>
+              {petImageSources[pet.id] ? (
+                <Image
+                  source={petImageSources[pet.id]}
+                  defaultSource={require('../../assets/icon.png')}
+                  style={styles.petImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Ionicons name="paw" size={20} color={theme.colors.primary} />
+              )}
             </View>
             <View style={styles.petInfo}>
               <Text style={styles.petName}>{pet.name}</Text>
               <Text style={styles.petBreed}>{pet.breed}</Text>
             </View>
-            {pet.selected ? <Text style={styles.petSelected}>Đã chọn</Text> : null}
-          </View>
+            {selectedPetId === pet.id ? <Text style={styles.petSelected}>Đã chọn</Text> : null}
+          </TouchableOpacity>
         ))}
       </Card>
 
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Nhóm triệu chứng</Text>
         <View style={styles.chipsRow}>
-          {symptomGroups.map((group, index) => (
-            <Chip key={group} label={group} active={index === 0} />
+          {groups.map((group) => (
+            <Chip
+              key={group.id}
+              label={group.label}
+              active={group.id === selectedGroupId}
+              onPress={() => setSelectedGroupId(group.id)}
+            />
           ))}
         </View>
       </Card>
 
-      <Text style={styles.note}>Gợi ý tham khảo, không thay thế tư vấn thú y.</Text>
-
       <PrimaryButton
         label="Tiếp tục"
-        onPress={() => navigation.navigate('SymptomStep2')}
+        onPress={() =>
+          navigation.navigate('SymptomStep2', {
+            selectedPetId,
+            selectedPetName: selectedPet?.name || '',
+            selectedGroupId,
+            selectedGroupLabel: groups.find((item) => item.id === selectedGroupId)?.label || ''
+          })
+        }
         style={styles.primaryButton}
       />
     </Screen>
@@ -100,16 +140,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    marginBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border
+  },
+  petRowSelected: {
+    borderColor: theme.colors.primary,
+    borderBottomColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySoft
   },
   petIcon: {
     width: 42,
     height: 42,
     borderRadius: 14,
     backgroundColor: '#F3F4F6',
+    padding: 1,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  petImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 13
+  },
+  petIconSelected: {
+    borderWidth: 1,
+    borderColor: theme.colors.primary
   },
   petInfo: {
     flex: 1,
@@ -136,15 +196,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap'
   },
-  note: {
-    ...theme.typography.caption,
-    color: theme.colors.textLight,
-    textAlign: 'center',
-    marginTop: theme.spacing.xl
-  },
   primaryButton: {
     marginTop: theme.spacing.xl
+  },
+  loading: {
+    ...theme.typography.body,
+    color: theme.colors.textMuted,
+    marginTop: theme.spacing.md
   }
 });
 
 export default SymptomStep1Screen;
+
+
+
+

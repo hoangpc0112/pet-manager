@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
@@ -18,34 +18,35 @@ const ActionButton = ({ icon, label, primary }) => {
   );
 };
 
-const PlaceDetailScreen = ({ navigation }) => {
+const PlaceDetailScreen = ({ navigation, route }) => {
+  const detail = route?.params?.place || placeDetail;
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>Quay lại</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi tiết địa điểm</Text>
       </View>
 
       <Card style={styles.card}>
-        <Text style={styles.tag}>{placeDetail.type}</Text>
+        <Text style={styles.tag}>{detail.type}</Text>
         <View style={styles.statusBadge}>
-          <Text style={styles.statusText}>{placeDetail.status}</Text>
+          <Text style={styles.statusText}>{detail.status}</Text>
         </View>
-        <Text style={styles.placeName}>{placeDetail.name}</Text>
+        <Text style={styles.placeName}>{detail.name}</Text>
         <View style={styles.infoRow}>
           <Ionicons name="location" size={14} color={theme.colors.textLight} />
-          <Text style={styles.infoText}>{placeDetail.address}</Text>
+          <Text style={styles.infoText}>{detail.address}</Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="time" size={14} color={theme.colors.textLight} />
-          <Text style={styles.infoText}>{placeDetail.hours}</Text>
+          <Text style={styles.infoText}>{detail.hours}</Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="star" size={14} color={theme.colors.warning} />
-          <Text style={styles.infoText}>{placeDetail.rating} ({placeDetail.reviewsCount} đánh giá)</Text>
+          <Text style={styles.infoText}>{detail.rating} ({detail.reviewsCount} đánh giá)</Text>
         </View>
       </Card>
 
@@ -60,21 +61,21 @@ const PlaceDetailScreen = ({ navigation }) => {
 
       <Text style={styles.sectionLabel}>DỊCH VỤ</Text>
       <Card style={styles.card}>
-        {placeDetail.services.map((service, index) => (
+        {detail.services.map((service, index) => (
           <ListRow
             key={service.id}
             title={service.title}
             subtitle={service.subtitle}
             right={<Ionicons name="chevron-forward" size={16} color={theme.colors.textLight} />}
-            style={index === placeDetail.services.length - 1 ? styles.lastRow : null}
+            style={index === detail.services.length - 1 ? styles.lastRow : null}
           />
         ))}
       </Card>
 
       <Text style={styles.sectionLabel}>ĐÁNH GIÁ</Text>
       <Card style={styles.card}>
-        {placeDetail.reviews.map((review, index) => (
-          <View key={review.id} style={[styles.reviewRow, index === placeDetail.reviews.length - 1 && styles.lastRow]}>
+        {detail.reviews.map((review, index) => (
+          <View key={review.id} style={[styles.reviewRow, index === detail.reviews.length - 1 && styles.lastRow]}>
             <Text style={styles.reviewName}>{review.name}</Text>
             <Text style={styles.reviewDate}>{review.date}</Text>
             <View style={styles.stars}>
@@ -219,7 +220,15 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     marginTop: theme.spacing.lg
+  },
+  loading: {
+    ...theme.typography.body,
+    color: theme.colors.textMuted,
+    marginTop: theme.spacing.md
   }
 });
 
 export default PlaceDetailScreen;
+
+
+

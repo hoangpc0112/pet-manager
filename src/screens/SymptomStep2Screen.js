@@ -1,21 +1,64 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+﻿import React, { useMemo, useState } from 'react';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import Chip from '../components/Chip';
 import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
-import { symptoms, symptomMeta } from '../data/assistant';
+import { symptomMeta, symptomOptions } from '../data/symptoms';
 
-const SymptomStep2Screen = ({ navigation }) => {
+const SymptomStep2Screen = ({ navigation, route }) => {
+  const symptomList = symptomOptions;
+  const meta = symptomMeta;
+  const [selectedSymptoms, setSelectedSymptoms] = useState([]);
+  const [duration, setDuration] = useState(meta.duration[1]);
+  const [energy, setEnergy] = useState(meta.energy[1]);
+  const [appetite, setAppetite] = useState(meta.appetite[0]);
+  const [severity, setSeverity] = useState(3);
+  const [symptomImageUri, setSymptomImageUri] = useState('');
+
+  const basePayload = useMemo(
+    () => ({
+      selectedPetId: route?.params?.selectedPetId || '',
+      selectedPetName: route?.params?.selectedPetName || '',
+      selectedGroupId: route?.params?.selectedGroupId || '',
+      selectedGroupLabel: route?.params?.selectedGroupLabel || ''
+    }),
+    [route?.params]
+  );
+
+  const toggleSymptom = (name) => {
+    setSelectedSymptoms((prev) =>
+      prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]
+    );
+  };
+
+  const handlePickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để chọn ảnh mô tả triệu chứng.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8
+    });
+
+    if (!result.canceled && result.assets?.length) {
+      setSymptomImageUri(result.assets[0].uri || '');
+    }
+  };
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>Quay lại</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Kiểm tra triệu chứng</Text>
       </View>
@@ -27,8 +70,8 @@ const SymptomStep2Screen = ({ navigation }) => {
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Triệu chứng đang gặp</Text>
         <View style={styles.chipsRow}>
-          {symptoms.map((item, index) => (
-            <Chip key={item} label={item} active={[0, 2, 4].includes(index)} />
+          {symptomList.map((item) => (
+            <Chip key={item} label={item} active={selectedSymptoms.includes(item)} onPress={() => toggleSymptom(item)} />
           ))}
         </View>
       </Card>
@@ -36,52 +79,92 @@ const SymptomStep2Screen = ({ navigation }) => {
       <Card style={styles.card}>
         <Text style={styles.metaLabel}>Thời gian kéo dài</Text>
         <View style={styles.segmentRow}>
-          {symptomMeta.duration.map((item, index) => (
-            <TouchableOpacity key={item} style={[styles.segment, index === 1 && styles.segmentActive]}>
-              <Text style={[styles.segmentText, index === 1 && styles.segmentTextActive]}>{item}</Text>
+          {meta.duration.map((item, index) => (
+            <TouchableOpacity
+              key={`${item}-${index}`}
+              style={[styles.segment, duration === item && styles.segmentActive]}
+              onPress={() => setDuration(item)}
+            >
+              <Text style={[styles.segmentText, duration === item && styles.segmentTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         <Text style={styles.metaLabel}>Mức năng lượng</Text>
         <View style={styles.segmentRow}>
-          {symptomMeta.energy.map((item, index) => (
-            <TouchableOpacity key={item} style={[styles.segment, index === 1 && styles.segmentActive]}>
-              <Text style={[styles.segmentText, index === 1 && styles.segmentTextActive]}>{item}</Text>
+          {meta.energy.map((item, index) => (
+            <TouchableOpacity
+              key={`${item}-${index}`}
+              style={[styles.segment, energy === item && styles.segmentActive]}
+              onPress={() => setEnergy(item)}
+            >
+              <Text style={[styles.segmentText, energy === item && styles.segmentTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         <Text style={styles.metaLabel}>Khẩu vị</Text>
         <View style={styles.segmentRow}>
-          {symptomMeta.appetite.map((item, index) => (
-            <TouchableOpacity key={item} style={[styles.segment, index === 0 && styles.segmentActive]}>
-              <Text style={[styles.segmentText, index === 0 && styles.segmentTextActive]}>{item}</Text>
+          {meta.appetite.map((item, index) => (
+            <TouchableOpacity
+              key={`${item}-${index}`}
+              style={[styles.segment, appetite === item && styles.segmentActive]}
+              onPress={() => setAppetite(item)}
+            >
+              <Text style={[styles.segmentText, appetite === item && styles.segmentTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.metaLabel}>Mức độ nghiêm trọng: 3/5</Text>
-        <View style={styles.sliderTrack}>
-          <View style={styles.sliderFill} />
-          <View style={styles.sliderThumb} />
+        <Text style={styles.metaLabel}>Mức độ nghiêm trọng: {severity}/5</Text>
+        <View style={styles.severityRow}>
+          {[1, 2, 3, 4, 5].map((value) => (
+            <TouchableOpacity
+              key={value}
+              style={[styles.severityButton, severity === value && styles.severityButtonActive]}
+              onPress={() => setSeverity(value)}
+            >
+              <Text style={[styles.severityButtonText, severity === value && styles.severityButtonTextActive]}>
+                {value}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </Card>
 
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Ảnh mô tả (tuỳ chọn)</Text>
-        <View style={styles.uploadBox}>
-          <Text style={styles.uploadText}>Chưa chọn ảnh</Text>
-        </View>
+        <TouchableOpacity style={styles.uploadBox} onPress={handlePickImage} activeOpacity={0.85}>
+          {symptomImageUri ? (
+            <Image source={{ uri: symptomImageUri }} style={styles.uploadPreview} resizeMode="cover" />
+          ) : (
+            <>
+              <Ionicons name="image" size={18} color={theme.colors.textLight} />
+              <Text style={styles.uploadText}>Chưa chọn ảnh</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        {symptomImageUri ? (
+          <TouchableOpacity style={styles.removeImageButton} onPress={() => setSymptomImageUri('')}>
+            <Ionicons name="close-circle" size={18} color={theme.colors.danger} />
+            <Text style={styles.removeImageText}>Xoá ảnh</Text>
+          </TouchableOpacity>
+        ) : null}
       </Card>
-
-      <View style={styles.noteCard}>
-        <Text style={styles.note}>Gợi ý tham khảo, không thay thế tư vấn thú y.</Text>
-      </View>
 
       <PrimaryButton
         label="Xem lại thông tin"
-        onPress={() => navigation.navigate('SymptomReview')}
+        onPress={() =>
+          navigation.navigate('SymptomReview', {
+            ...basePayload,
+            symptoms: selectedSymptoms,
+            duration,
+            energy,
+            appetite,
+            severity,
+            symptomImageUri: symptomImageUri || null
+          })
+        }
         style={styles.primaryButton}
       />
     </Screen>
@@ -163,31 +246,31 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontWeight: '600'
   },
-  sliderTrack: {
-    height: 6,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 999,
-    marginTop: 12,
-    position: 'relative'
+  severityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between'
   },
-  sliderFill: {
-    position: 'absolute',
-    left: 0,
-    width: '70%',
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: theme.colors.primary
+  severityButton: {
+    width: 44,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF'
   },
-  sliderThumb: {
-    position: 'absolute',
-    left: '66%',
-    top: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: theme.colors.primary,
-    borderWidth: 3,
-    borderColor: '#FFFFFF'
+  severityButtonActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySoft
+  },
+  severityButtonText: {
+    ...theme.typography.bodyRegular,
+    color: theme.colors.textMuted
+  },
+  severityButtonTextActive: {
+    color: theme.colors.primary,
+    fontWeight: '700'
   },
   uploadBox: {
     height: 90,
@@ -196,25 +279,41 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: theme.colors.border,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    overflow: 'hidden'
+  },
+  uploadPreview: {
+    width: '100%',
+    height: '100%'
   },
   uploadText: {
-    color: theme.colors.textLight
+    color: theme.colors.textLight,
+    marginTop: 6
   },
-  noteCard: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 16,
-    paddingVertical: 12,
-    marginTop: theme.spacing.lg
+  removeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 8
   },
-  note: {
-    ...theme.typography.caption,
-    color: theme.colors.textMuted,
-    textAlign: 'center'
+  removeImageText: {
+    ...theme.typography.small,
+    color: theme.colors.danger,
+    marginLeft: 4,
+    fontWeight: '600'
   },
   primaryButton: {
     marginTop: theme.spacing.lg
+  },
+  loading: {
+    ...theme.typography.body,
+    color: theme.colors.textMuted,
+    marginTop: theme.spacing.md
   }
 });
 
 export default SymptomStep2Screen;
+
+
+
+

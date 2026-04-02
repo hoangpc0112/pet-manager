@@ -194,6 +194,20 @@ export const signOutCurrentUser = async () => {
   await signOut(auth);
 };
 
+export const updateCurrentUserProfile = async ({ displayName, photoURL }) => {
+  if (!auth.currentUser) {
+    throw createAuthError('auth/no-current-user', 'Chua co nguoi dung dang nhap.');
+  }
+
+  const payload = {};
+  if (typeof displayName === 'string') payload.displayName = displayName;
+  if (typeof photoURL === 'string') payload.photoURL = photoURL;
+  if (photoURL === null) payload.photoURL = null;
+
+  await updateProfile(auth.currentUser, payload);
+  return auth.currentUser;
+};
+
 export const getAuthErrorMessage = (error) => {
   const code = error?.code;
   const fallback = 'Có lỗi xảy ra. Vui lòng thử lại.';
@@ -219,6 +233,8 @@ export const getAuthErrorMessage = (error) => {
     'auth/invalid-api-key': 'Firebase API key khong hop le.',
     'auth/app-not-authorized': 'Ung dung chua duoc cap quyen tren Firebase project.',
     'auth/internal-error': 'Firebase Auth gap loi noi bo. Vui long thu lai.',
+    'auth/invalid-profile-attribute':
+      'Anh dai dien khong hop le cho Firebase Auth. Vui long dung URL http/https hoac de trong.',
     'auth/too-many-requests': 'Qua nhieu yeu cau trong thoi gian ngan. Vui long thu lai sau.',
     'auth/network-request-failed': 'Lỗi mạng. Vui lòng kiểm tra kết nối internet.',
     'auth/invalid-verification-code': 'Mã OTP chưa đúng.',
@@ -230,7 +246,8 @@ export const getAuthErrorMessage = (error) => {
     'auth/otp-emailjs-non-browser-disabled':
       'EmailJS đang chặn môi trường non-browser. Vào EmailJS > Account > Security và bật API access from non-browser environments.',
     'auth/otp-emailjs-strict-mode-private-key-missing':
-      'EmailJS đang bật strict mode nhưng chưa có Private Key. Thêm EXPO_PUBLIC_EMAILJS_PRIVATE_KEY hoặc tắt strict mode.'
+      'EmailJS đang bật strict mode nhưng chưa có Private Key. Thêm EXPO_PUBLIC_EMAILJS_PRIVATE_KEY hoặc tắt strict mode.',
+    'auth/no-current-user': 'Chưa có người dùng đăng nhập.'
   };
 
   if (messageMap[code]) return messageMap[code];

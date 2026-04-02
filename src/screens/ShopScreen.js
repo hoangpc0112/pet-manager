@@ -1,19 +1,69 @@
-﻿import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import Chip from '../components/Chip';
+import PaginationControls from '../components/PaginationControls';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+
+const PAGE_SIZE = 6;
+const ALL_TAB = 'Tất cả';
+const DEFAULT_SHOPEE_URL = 'https://shopee.vn/search?keyword=pet';
 
 const ShopScreen = ({ navigation }) => {
   const { shopTabs, shopItems } = useAppData();
   const tabs = shopTabs || [];
   const items = shopItems || [];
+  const scrollRef = useRef(null);
+  const [selectedTab, setSelectedTab] = useState(tabs[0] || ALL_TAB);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    if (!tabs.includes(selectedTab)) {
+      setSelectedTab(tabs[0] || ALL_TAB);
+      setCurrentPage(1);
+    }
+  }, [tabs, selectedTab]);
+
+  const filteredItems = useMemo(() => {
+    if (selectedTab === ALL_TAB) return items;
+    return items.filter((item) => item.category === selectedTab);
+  }, [items, selectedTab]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const visibleItems = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredItems.slice(start, start + PAGE_SIZE);
+  }, [filteredItems, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [filteredItems.length, totalPages]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [currentPage]);
+
+  const handleOpenShopee = async (item) => {
+    const itemKeyword = encodeURIComponent(String(item?.title || 'phu kien thu cung'));
+    const targetUrl = item?.link || item?.url || `https://shopee.vn/search?keyword=${itemKeyword}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(targetUrl);
+      if (!canOpen) {
+        await Linking.openURL(DEFAULT_SHOPEE_URL);
+        return;
+      }
+      await Linking.openURL(targetUrl);
+    } catch (_error) {
+      Alert.alert('Không thể mở liên kết', 'Không mở được Shopee. Vui lòng thử lại sau.');
+    }
+  };
 
   return (
-    <Screen contentContainerStyle={styles.container}>
+    <Screen contentContainerStyle={styles.container} scrollViewRef={scrollRef}>
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
@@ -27,25 +77,27 @@ const ShopScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.tabRow}>
-        {tabs.map((tab, index) => (
-          <Chip key={tab} label={tab} active={index === 0} style={styles.tabChip} />
+        {tabs.map((tab) => (
+          <Chip key={tab} label={tab} active={tab === selectedTab} onPress={() => setSelectedTab(tab)} style={styles.tabChip} />
         ))}
       </View>
 
-      {items.map((item) => (
+      {visibleItems.map((item) => (
         <Card key={item.id} style={styles.itemCard}>
           <Text style={styles.itemCategory}>{item.category}</Text>
           <Text style={styles.itemTitle}>{item.title}</Text>
           <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
           <View style={styles.itemFooter}>
             <Text style={styles.itemPrice}>{item.price}</Text>
-            <TouchableOpacity style={styles.itemButton}>
+            <TouchableOpacity style={styles.itemButton} onPress={() => handleOpenShopee(item)}>
               <Text style={styles.itemButtonText}>Xem sản phẩm</Text>
               <Ionicons name="open" size={14} color={theme.colors.textLight} />
             </TouchableOpacity>
           </View>
         </Card>
       ))}
+
+      <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </Screen>
   );
 };

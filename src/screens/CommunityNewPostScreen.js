@@ -6,6 +6,7 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import { useAuth } from '../context/AuthContext';
 
 const categories = ['Hỏi đáp', 'review', 'Mạng xã hội'];
 
@@ -19,7 +20,8 @@ const Field = ({ label, children }) => {
 };
 
 const CommunityNewPostScreen = ({ navigation }) => {
-  const { addCommunityPost, newPostDefaults, nearbyServices } = useAppData();
+  const { addCommunityPost, newPostDefaults, nearbyServices, profileOverview } = useAppData();
+  const { user } = useAuth();
   const servicePlaces = Array.from(new Set((nearbyServices || []).map((item) => item.name)));
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(newPostDefaults?.category || 'Hỏi đáp');
@@ -66,6 +68,8 @@ const CommunityNewPostScreen = ({ navigation }) => {
 
     addCommunityPost({
       title: title.trim(),
+      author: user?.displayName || profileOverview?.name || 'Bạn',
+      authorAvatarUrl: user?.photoURL || profileOverview?.avatarUrl || '',
       category,
       content: content.trim(),
       imageUrl: imageDataUri || null,

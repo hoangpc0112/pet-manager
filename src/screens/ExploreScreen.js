@@ -35,42 +35,6 @@ const ExploreScreen = ({ navigation }) => {
           </Card>
         </TouchableOpacity>
       ))}
-
-      <Text style={styles.sectionLabel}>GỢI Ý CHO BẠN</Text>
-      <Card style={styles.recommendationCard}>
-        {suggestionItems.map((item, index) => (
-          <TouchableOpacity
-            key={item.id}
-            activeOpacity={0.8}
-            onPress={() => {
-              if (index === 0) navigation.navigate('PlaceDetail');
-            }}
-            style={styles.recommendRow}
-          >
-            <View style={styles.recommendIcon}>
-              <Ionicons name={index === 3 ? 'chatbubbles' : 'medical'} size={18} color={theme.colors.primary} />
-            </View>
-            <View style={styles.recommendText}>
-              <Text style={styles.recommendTitle}>{item.title}</Text>
-              <Text style={styles.recommendMeta}>{item.meta}</Text>
-            </View>
-            {item.rating ? (
-              <View style={styles.ratingRow}>
-                <Text style={styles.ratingText}>{item.rating}</Text>
-                <Ionicons name="star" size={12} color={theme.colors.warning} />
-              </View>
-            ) : null}
-            {index < suggestionItems.length - 1 ? <View style={styles.divider} /> : null}
-          </TouchableOpacity>
-        ))}
-      </Card>
-
-      <View style={styles.tipCard}>
-        <Ionicons name="sparkles" size={16} color={theme.colors.primary} />
-        <Text style={styles.tipText}>
-          Gợi ý được cá nhân hoá theo hồ sơ thú cưng, lịch nhắc nhở và vị trí bạn thường dùng.
-        </Text>
-      </View>
     </Screen>
   );
 };

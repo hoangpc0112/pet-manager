@@ -107,7 +107,7 @@ const SymptomResultScreen = ({ navigation, route }) => {
       <PrimaryButton label="Lưu vào nhật ký" onPress={handleSaveToJournal} style={styles.primaryButton} />
       <GhostButton
         label="Tạo nhắc nhở"
-        onPress={() => navigation.navigate('Tabs', { screen: 'Reminders' })}
+        onPress={() => navigation.navigate('ReminderNew')}
         style={styles.ghostButton}
       />
       <GhostButton label="Quay về danh sách thú cưng" onPress={() => navigation.navigate('Tabs', { screen: 'Pets' })} />

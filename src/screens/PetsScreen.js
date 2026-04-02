@@ -1,15 +1,25 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
-import PrimaryButton from '../components/PrimaryButton';
+import PaginationControls from '../components/PaginationControls';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import { getCollectionPage } from '../services/firestore';
+
+const PAGE_SIZE = 5;
 
 const PetsScreen = ({ navigation }) => {
   const { pets } = useAppData();
+  const scrollRef = useRef(null);
   const [keyword, setKeyword] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [serverPagePets, setServerPagePets] = useState([]);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+  const pageDataCacheRef = useRef({});
+  const pageStartCursorRef = useRef({ 1: null });
 
   const filteredPets = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -21,12 +31,87 @@ const PetsScreen = ({ navigation }) => {
     });
   }, [pets, keyword]);
 
+  const isSearching = keyword.trim().length > 0;
+  const totalPages = Math.max(1, Math.ceil((isSearching ? filteredPets.length : pets.length) / PAGE_SIZE));
+  const visiblePets = useMemo(() => {
+    if (isSearching) {
+      const start = (currentPage - 1) * PAGE_SIZE;
+      return filteredPets.slice(start, start + PAGE_SIZE);
+    }
+    return serverPagePets;
+  }, [isSearching, filteredPets, currentPage, serverPagePets]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [keyword, filteredPets.length, pets.length]);
+
+  useEffect(() => {
+    pageDataCacheRef.current = {};
+    pageStartCursorRef.current = { 1: null };
+  }, [pets.length]);
+
+  const loadPage = async (targetPage) => {
+    if (isSearching) return;
+
+    if (pageDataCacheRef.current[targetPage]) {
+      setServerPagePets(pageDataCacheRef.current[targetPage]);
+      return;
+    }
+
+    setIsPageLoading(true);
+    try {
+      for (let page = 1; page < targetPage; page += 1) {
+        if (pageStartCursorRef.current[page + 1] !== undefined) {
+          continue;
+        }
+
+        const result = await getCollectionPage({
+          collectionName: 'pets',
+          pageSize: PAGE_SIZE,
+          cursor: pageStartCursorRef.current[page],
+          orderByField: 'createdAt',
+          orderDirection: 'desc'
+        });
+
+        pageDataCacheRef.current[page] = result.docs;
+        pageStartCursorRef.current[page + 1] = result.nextCursor;
+      }
+
+      const result = await getCollectionPage({
+        collectionName: 'pets',
+        pageSize: PAGE_SIZE,
+        cursor: pageStartCursorRef.current[targetPage],
+        orderByField: 'createdAt',
+        orderDirection: 'desc'
+      });
+
+      pageDataCacheRef.current[targetPage] = result.docs;
+      pageStartCursorRef.current[targetPage + 1] = result.nextCursor;
+      setServerPagePets(result.docs);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to load pets page:', error);
+      setServerPagePets([]);
+    } finally {
+      setIsPageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+
+    if (!isSearching) {
+      loadPage(currentPage);
+    }
+  }, [currentPage, isSearching, pets.length]);
+
   return (
-    <Screen contentContainerStyle={styles.container}>
+    <Screen contentContainerStyle={styles.container} scrollViewRef={scrollRef}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Thú cưng</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('PetNew')}>
-          <Ionicons name="add" size={22} color={theme.colors.primary} />
+          <Ionicons name="add" size={18} color="#FFFFFF" />
+          <Text style={styles.addButtonText}>Thêm mới</Text>
         </TouchableOpacity>
       </View>
 
@@ -41,13 +126,7 @@ const PetsScreen = ({ navigation }) => {
         />
       </View>
 
-      <PrimaryButton
-        label="Kiểm tra triệu chứng"
-        onPress={() => navigation.navigate('SymptomStep1')}
-        style={styles.symptomButton}
-      />
-
-      {filteredPets.map((pet) => (
+      {visiblePets.map((pet) => (
         <TouchableOpacity
           key={pet.id}
           activeOpacity={0.9}
@@ -64,6 +143,9 @@ const PetsScreen = ({ navigation }) => {
           </Card>
         </TouchableOpacity>
       ))}
+
+      {isPageLoading ? <Text style={styles.loadingText}>Đang tải danh sách...</Text> : null}
+      <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </Screen>
   );
 };
@@ -83,13 +165,18 @@ const styles = StyleSheet.create({
     color: theme.colors.text
   },
   addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 999,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    ...theme.shadow.card
+    paddingVertical: 8,
+    paddingHorizontal: 12
+  },
+  addButtonText: {
+    ...theme.typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    marginLeft: 2
   },
   searchBox: {
     flexDirection: 'row',
@@ -100,9 +187,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#D1D5DB',
-    marginBottom: theme.spacing.lg
-  },
-  symptomButton: {
     marginBottom: theme.spacing.lg
   },
   searchInput: {
@@ -137,6 +221,12 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: theme.colors.text,
     marginTop: 4
+  },
+  loadingText: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+    marginTop: theme.spacing.sm
   }
 });
 

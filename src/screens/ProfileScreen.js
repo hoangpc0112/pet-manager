@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
@@ -8,7 +8,7 @@ import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
 import { useAuth } from '../context/AuthContext';
 
-const ProfileScreen = ({ onLogout }) => {
+const ProfileScreen = ({ navigation, onLogout }) => {
   const { profileOverview, profileSettings, profileStats } = useAppData();
   const { user } = useAuth();
   const overview = profileOverview || {};
@@ -17,6 +17,7 @@ const ProfileScreen = ({ onLogout }) => {
   const profileName = user?.displayName || overview.name || 'Người dùng';
   const profileEmail = user?.email || overview.email || 'Chưa cập nhật email';
   const profilePhone = user?.phoneNumber || overview.phone || 'Chưa cập nhật số điện thoại';
+  const profileAvatar = user?.photoURL || overview.avatarUrl || '';
 
   return (
     <Screen contentContainerStyle={styles.container}>
@@ -26,16 +27,21 @@ const ProfileScreen = ({ onLogout }) => {
 
       <Card style={styles.profileCard}>
         <View style={styles.avatar}>
-          <Ionicons name="person" size={26} color={theme.colors.primary} />
+          {profileAvatar ? (
+            <Image source={{ uri: profileAvatar }} style={styles.avatarImage} resizeMode="cover" />
+          ) : (
+            <Ionicons name="person" size={26} color={theme.colors.primary} />
+          )}
         </View>
         <View style={styles.profileInfo}>
           <Text style={styles.name}>{profileName}</Text>
           <Text style={styles.meta}>{profileEmail}</Text>
           <Text style={styles.meta}>{profilePhone}</Text>
         </View>
-        <View style={styles.planBadge}>
-          <Text style={styles.planText}>{overview.plan}</Text>
-        </View>
+        <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate('ProfileEdit')}>
+          <Ionicons name="create-outline" size={16} color={theme.colors.primary} />
+          {/* <Text style={styles.editButtonText}>Sửa</Text> */}
+        </TouchableOpacity>
       </Card>
 
       <View style={styles.statsRow}>
@@ -79,7 +85,7 @@ const styles = StyleSheet.create({
   title: {
     ...theme.typography.h1,
     color: theme.colors.text,
-    marginLeft: 8
+    // marginLeft: 8
   },
   profileCard: {
     flexDirection: 'row',
@@ -94,6 +100,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18
+  },
   profileInfo: {
     flex: 1,
     marginLeft: 12
@@ -107,15 +118,21 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     marginTop: 4
   },
-  planBadge: {
-    backgroundColor: '#FEF3C7',
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySoft,
+    borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999
+    paddingVertical: 6
   },
-  planText: {
-    color: '#B45309',
-    fontWeight: '600'
+  editButtonText: {
+    ...theme.typography.caption,
+    color: theme.colors.primary,
+    marginLeft: 4,
+    fontWeight: '700'
   },
   statsRow: {
     flexDirection: 'row',

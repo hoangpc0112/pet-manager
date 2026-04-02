@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
+  deleteDocument,
   getCollectionDocs,
   getDocument,
   setDocument,
@@ -35,7 +36,8 @@ const DEFAULT_APP_CONFIG = {
     name: 'Người dùng',
     email: '',
     phone: '',
-    plan: 'Free'
+    plan: 'Free',
+    avatarUrl: ''
   },
   profileStats: [],
   profileSettings: [],
@@ -74,6 +76,48 @@ const sortByCreatedAtDesc = (items) =>
     return aSeed - bSeed;
   });
 
+const parseVnDateToMs = (dateText) => {
+  if (!dateText || typeof dateText !== 'string') return 0;
+  const parts = dateText.split('/').map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return 0;
+  const [day, month, year] = parts;
+  const value = new Date(year, month - 1, day).getTime();
+  return Number.isNaN(value) ? 0 : value;
+};
+
+const getVaccinationState = ({ doneDate, nextDate, status }) => {
+  if (status === 'pending') {
+    return { status: 'pending', statusLabel: 'Chưa tiêm' };
+  }
+
+  if (!doneDate) {
+    return { status: 'pending', statusLabel: 'Chưa tiêm' };
+  }
+
+  const nextDateMs = parseVnDateToMs(nextDate);
+  if (!nextDateMs) {
+    return { status: 'done', statusLabel: 'Hoàn tất' };
+  }
+
+  return nextDateMs < Date.now()
+    ? { status: 'overdue', statusLabel: 'Quá hạn' }
+    : { status: 'done', statusLabel: 'Hoàn tất' };
+};
+
+const normalizeCommunityPost = (post) => {
+  const commentsCount = Number.isFinite(post.comments) ? post.comments : 0;
+  const commentItems = Array.isArray(post.commentItems) ? post.commentItems : [];
+
+  return {
+    ...post,
+    authorAvatarUrl: post.authorAvatarUrl || '',
+    likes: Number.isFinite(post.likes) ? post.likes : 0,
+    comments: commentItems.length > 0 ? commentItems.length : commentsCount,
+    likedBy: Array.isArray(post.likedBy) ? post.likedBy : [],
+    commentItems
+  };
+};
+
 export const AppDataProvider = ({ children }) => {
   const [pets, setPets] = useState([]);
   const [journalEntries, setJournalEntries] = useState([]);
@@ -96,7 +140,7 @@ export const AppDataProvider = ({ children }) => {
       }
       setPets(sortByCreatedAtDesc(petDocs));
       setJournalEntries(sortByCreatedAtDesc(journalDocs));
-      setCommunityPosts(sortByCreatedAtDesc(communityDocs));
+      setCommunityPosts(sortByCreatedAtDesc(communityDocs).map(normalizeCommunityPost));
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to load Firestore data:', error);
@@ -167,7 +211,7 @@ export const AppDataProvider = ({ children }) => {
     const unsubCommunity = subscribeCollectionDocs(
       'communityPosts',
       (communityDocs) => {
-        setCommunityPosts(sortByCreatedAtDesc(communityDocs));
+        setCommunityPosts(sortByCreatedAtDesc(communityDocs).map(normalizeCommunityPost));
         markLoaded('communityPosts');
       },
       (error) => {
@@ -204,6 +248,18 @@ export const AppDataProvider = ({ children }) => {
     return nextEntry;
   };
 
+  const deleteJournalEntry = (entryId) => {
+    if (!entryId) return false;
+
+    setJournalEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+    deleteDocument('journalEntries', entryId).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete journal entry:', error);
+    });
+
+    return true;
+  };
+
   const addPet = (petInput) => {
     const nextPet = {
       id: makeId('pet'),
@@ -226,6 +282,322 @@ export const AppDataProvider = ({ children }) => {
     return nextPet;
   };
 
+  const updatePet = (petId, petInput) => {
+    const currentPet = pets.find((pet) => pet.id === petId);
+    if (!currentPet) return null;
+
+    const nextPet = {
+      ...currentPet,
+      ...petInput,
+      updatedAt: Date.now()
+    };
+
+    setPets((prev) => prev.map((pet) => (pet.id === petId ? nextPet : pet)));
+    setDocument('pets', petId, nextPet).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to update pet:', error);
+    });
+
+    if (nextPet.name && nextPet.name !== currentPet.name) {
+      setJournalEntries((prev) =>
+        prev.map((entry) => (entry.pet === currentPet.name ? { ...entry, pet: nextPet.name } : entry))
+      );
+
+      journalEntries
+        .filter((entry) => entry.pet === currentPet.name)
+        .forEach((entry) => {
+          setDocument('journalEntries', entry.id, { pet: nextPet.name }).catch((error) => {
+            // eslint-disable-next-line no-console
+            console.error('Failed to update journal pet name:', error);
+          });
+        });
+    }
+
+    return nextPet;
+  };
+
+  const updateProfileOverview = (profileInput) => {
+    const nextOverview = {
+      ...(appConfig.profileOverview || DEFAULT_APP_CONFIG.profileOverview),
+      ...profileInput
+    };
+
+    setAppConfig((prev) => ({
+      ...prev,
+      profileOverview: nextOverview
+    }));
+
+    setDocument('app_config', 'main', { profileOverview: nextOverview }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to update profile overview:', error);
+    });
+
+    return nextOverview;
+  };
+
+  const addPetVaccination = (petId, vaccineInput) => {
+    const currentPet = pets.find((pet) => pet.id === petId);
+    if (!currentPet) return null;
+
+    const doneDate = vaccineInput.doneDate || '';
+    const nextDate = vaccineInput.nextDate || '';
+    const state = getVaccinationState({ doneDate, nextDate, status: vaccineInput.status || 'pending' });
+    const nextVaccination = {
+      id: makeId('vac'),
+      name: vaccineInput.name,
+      doneDate,
+      nextDate,
+      clinic: vaccineInput.clinic || 'Chưa cập nhật',
+      note: vaccineInput.note || '',
+      status: state.status,
+      statusLabel: state.statusLabel,
+      createdAt: Date.now()
+    };
+
+    const currentVaccinations = Array.isArray(currentPet.vaccinations) ? currentPet.vaccinations : [];
+    const nextVaccinations = sortByCreatedAtDesc([...currentVaccinations, nextVaccination]);
+
+    setPets((prev) =>
+      prev.map((pet) =>
+        pet.id === petId
+          ? {
+              ...pet,
+              vaccinations: nextVaccinations,
+              updatedAt: Date.now()
+            }
+          : pet
+      )
+    );
+
+    setDocument('pets', petId, {
+      vaccinations: nextVaccinations,
+      updatedAt: Date.now()
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to add pet vaccination:', error);
+    });
+
+    return nextVaccination;
+  };
+
+  const updatePetVaccination = (petId, vaccinationId, vaccineInput) => {
+    const currentPet = pets.find((pet) => pet.id === petId);
+    if (!currentPet || !vaccinationId) return null;
+
+    const currentVaccinations = Array.isArray(currentPet.vaccinations) ? currentPet.vaccinations : [];
+    const currentItem = currentVaccinations.find((item) => item.id === vaccinationId);
+    if (!currentItem) return null;
+
+    const doneDate = vaccineInput.doneDate ?? currentItem.doneDate ?? '';
+    const nextDate = vaccineInput.nextDate ?? currentItem.nextDate ?? '';
+    const state = getVaccinationState({ doneDate, nextDate, status: vaccineInput.status || currentItem.status });
+    const nextItem = {
+      ...currentItem,
+      ...vaccineInput,
+      doneDate,
+      nextDate,
+      status: state.status,
+      statusLabel: state.statusLabel,
+      updatedAt: Date.now()
+    };
+
+    const nextVaccinations = sortByCreatedAtDesc(
+      currentVaccinations.map((item) => (item.id === vaccinationId ? nextItem : item))
+    );
+
+    setPets((prev) =>
+      prev.map((pet) =>
+        pet.id === petId
+          ? {
+              ...pet,
+              vaccinations: nextVaccinations,
+              updatedAt: Date.now()
+            }
+          : pet
+      )
+    );
+
+    setDocument('pets', petId, {
+      vaccinations: nextVaccinations,
+      updatedAt: Date.now()
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to update pet vaccination:', error);
+    });
+
+    return nextItem;
+  };
+
+  const deletePetVaccination = (petId, vaccinationId) => {
+    const currentPet = pets.find((pet) => pet.id === petId);
+    if (!currentPet || !vaccinationId) return false;
+
+    const currentVaccinations = Array.isArray(currentPet.vaccinations) ? currentPet.vaccinations : [];
+    const nextVaccinations = currentVaccinations.filter((item) => item.id !== vaccinationId);
+    if (nextVaccinations.length === currentVaccinations.length) return false;
+
+    setPets((prev) =>
+      prev.map((pet) =>
+        pet.id === petId
+          ? {
+              ...pet,
+              vaccinations: nextVaccinations,
+              updatedAt: Date.now()
+            }
+          : pet
+      )
+    );
+
+    setDocument('pets', petId, {
+      vaccinations: nextVaccinations,
+      updatedAt: Date.now()
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete pet vaccination:', error);
+    });
+
+    return true;
+  };
+
+  const createReminder = (reminderInput) => {
+    const nextReminder = {
+      id: makeId('rem'),
+      title: reminderInput.title,
+      time: reminderInput.time,
+      repeat: reminderInput.repeat || 'Mỗi ngày',
+      pet: reminderInput.pet || 'Tất cả',
+      enabled: true,
+      createdAt: Date.now()
+    };
+
+    let nextItems = [];
+    let nextSummary = DEFAULT_APP_CONFIG.reminderSummary;
+    setAppConfig((prev) => {
+      const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+      nextItems = sortByCreatedAtDesc([nextReminder, ...currentItems]);
+      nextSummary = {
+        ...(prev.reminderSummary || DEFAULT_APP_CONFIG.reminderSummary),
+        count: nextItems.length
+      };
+
+      return {
+        ...prev,
+        reminderItems: nextItems,
+        reminderSummary: nextSummary
+      };
+    });
+
+    setDocument('app_config', 'main', {
+      reminderItems: nextItems,
+      reminderSummary: nextSummary,
+      updatedAt: Date.now()
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to create reminder:', error);
+    });
+
+    return nextReminder;
+  };
+
+  const toggleReminderEnabled = (reminderId) => {
+    if (!reminderId) return null;
+
+    let nextItems = [];
+    setAppConfig((prev) => {
+      const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+      nextItems = currentItems.map((item) =>
+        item.id === reminderId ? { ...item, enabled: !item.enabled, updatedAt: Date.now() } : item
+      );
+
+      return {
+        ...prev,
+        reminderItems: nextItems
+      };
+    });
+
+    setDocument('app_config', 'main', {
+      reminderItems: nextItems,
+      updatedAt: Date.now()
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to toggle reminder:', error);
+    });
+
+    return nextItems.find((item) => item.id === reminderId) || null;
+  };
+
+  const updateReminder = (reminderId, reminderInput) => {
+    if (!reminderId) return null;
+
+    let nextItems = [];
+    let nextReminder = null;
+    setAppConfig((prev) => {
+      const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+      nextItems = currentItems.map((item) => {
+        if (item.id !== reminderId) return item;
+        nextReminder = {
+          ...item,
+          ...reminderInput,
+          updatedAt: Date.now()
+        };
+        return nextReminder;
+      });
+
+      return {
+        ...prev,
+        reminderItems: nextItems
+      };
+    });
+
+    if (!nextReminder) return null;
+
+    setDocument('app_config', 'main', {
+      reminderItems: nextItems,
+      updatedAt: Date.now()
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to update reminder:', error);
+    });
+
+    return nextReminder;
+  };
+
+  const deleteReminder = (reminderId) => {
+    if (!reminderId) return false;
+
+    let nextItems = [];
+    let removed = false;
+    let nextSummary = DEFAULT_APP_CONFIG.reminderSummary;
+    setAppConfig((prev) => {
+      const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+      nextItems = currentItems.filter((item) => item.id !== reminderId);
+      removed = nextItems.length !== currentItems.length;
+      nextSummary = {
+        ...(prev.reminderSummary || DEFAULT_APP_CONFIG.reminderSummary),
+        count: nextItems.length
+      };
+
+      return {
+        ...prev,
+        reminderItems: nextItems,
+        reminderSummary: nextSummary
+      };
+    });
+
+    if (!removed) return false;
+
+    setDocument('app_config', 'main', {
+      reminderItems: nextItems,
+      reminderSummary: nextSummary,
+      updatedAt: Date.now()
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete reminder:', error);
+    });
+
+    return true;
+  };
+
   const getPetById = (petId) => pets.find((pet) => pet.id === petId) || null;
 
   const addCommunityPost = (postInput) => {
@@ -241,6 +613,7 @@ export const AppDataProvider = ({ children }) => {
       id: makeId('post'),
       title: postInput.title,
       author: postInput.author || 'Bạn',
+      authorAvatarUrl: postInput.authorAvatarUrl || '',
       time: 'Vừa xong',
       content: postInput.content,
       imageUrl: postInput.imageUrl || null,
@@ -248,6 +621,8 @@ export const AppDataProvider = ({ children }) => {
       location: category === 'Mạng xã hội' ? '' : postInput.location || 'Chưa cập nhật',
       likes: 0,
       comments: 0,
+      likedBy: [],
+      commentItems: [],
       category,
       reviewScore: category === 'review' ? postInput.reviewScore || 5 : null,
       createdAt: Date.now()
@@ -261,6 +636,87 @@ export const AppDataProvider = ({ children }) => {
     return nextPost;
   };
 
+  const toggleCommunityPostLike = (postId, actorId) => {
+    if (!actorId) return null;
+
+    let nextPost = null;
+    setCommunityPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+
+        const likedBy = Array.isArray(post.likedBy) ? [...post.likedBy] : [];
+        const alreadyLiked = likedBy.includes(actorId);
+        const nextLikedBy = alreadyLiked ? likedBy.filter((id) => id !== actorId) : [...likedBy, actorId];
+        const updated = {
+          ...post,
+          likedBy: nextLikedBy,
+          likes: nextLikedBy.length,
+          updatedAt: Date.now()
+        };
+        nextPost = updated;
+        return updated;
+      })
+    );
+
+    if (!nextPost) return null;
+
+    setDocument('communityPosts', postId, {
+      likedBy: nextPost.likedBy,
+      likes: nextPost.likes,
+      updatedAt: nextPost.updatedAt
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to update post like:', error);
+    });
+
+    return nextPost;
+  };
+
+  const addCommunityPostComment = (postId, commentInput) => {
+    const content = String(commentInput?.content || '').trim();
+    if (!content) return null;
+
+    let nextPost = null;
+    setCommunityPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+
+        const nextComment = {
+          id: makeId('cmt'),
+          author: commentInput.author || 'Bạn',
+          authorAvatarUrl: commentInput.authorAvatarUrl || '',
+          content,
+          createdAt: Date.now(),
+          time: 'Vừa xong'
+        };
+
+        const currentItems = Array.isArray(post.commentItems) ? post.commentItems : [];
+        const nextItems = [...currentItems, nextComment];
+        const updated = {
+          ...post,
+          commentItems: nextItems,
+          comments: nextItems.length,
+          updatedAt: Date.now()
+        };
+        nextPost = updated;
+        return updated;
+      })
+    );
+
+    if (!nextPost) return null;
+
+    setDocument('communityPosts', postId, {
+      commentItems: nextPost.commentItems,
+      comments: nextPost.comments,
+      updatedAt: nextPost.updatedAt
+    }).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to add post comment:', error);
+    });
+
+    return nextPost;
+  };
+
   const value = useMemo(
     () => ({
       ...appConfig,
@@ -270,9 +726,21 @@ export const AppDataProvider = ({ children }) => {
       isLoadingData,
       reloadAppData: loadAppData,
       saveJournalEntry,
+      deleteJournalEntry,
       addPet,
+      updatePet,
+      addPetVaccination,
+      updatePetVaccination,
+      deletePetVaccination,
       getPetById,
-      addCommunityPost
+      createReminder,
+      toggleReminderEnabled,
+      updateReminder,
+      deleteReminder,
+      updateProfileOverview,
+      addCommunityPost,
+      toggleCommunityPostLike,
+      addCommunityPostComment
     }),
     [appConfig, pets, journalEntries, communityPosts, isLoadingData, loadAppData]
   );

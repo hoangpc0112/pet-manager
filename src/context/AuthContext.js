@@ -5,6 +5,7 @@ import {
   requestSignUpEmailOtp,
   signInWithEmail,
   signOutCurrentUser,
+  updateCurrentUserProfile,
   verifySignUpEmailOtp
 } from '../services/auth';
 
@@ -29,6 +30,7 @@ export const AuthProvider = ({ children }) => {
       isAuthLoading,
       signIn: signInWithEmail,
       signOut: signOutCurrentUser,
+      updateUserProfile: updateCurrentUserProfile,
       requestSignUpOtp: requestSignUpEmailOtp,
       resendSignUpOtp: resendSignUpEmailOtp,
       verifySignUpOtp: verifySignUpEmailOtp

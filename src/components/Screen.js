@@ -1,9 +1,46 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import theme from '../theme';
 
-const Screen = ({ children, scroll = true, contentContainerStyle, style }) => {
+const Screen = ({
+  children,
+  scroll = true,
+  contentContainerStyle,
+  style,
+  scrollViewRef,
+  resetScrollOnFocus = true
+}) => {
+  const internalScrollRef = useRef(null);
+
+  const assignScrollRef = useCallback(
+    (node) => {
+      internalScrollRef.current = node;
+
+      if (!scrollViewRef) return;
+      if (typeof scrollViewRef === 'function') {
+        scrollViewRef(node);
+        return;
+      }
+
+      scrollViewRef.current = node;
+    },
+    [scrollViewRef]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!scroll || !resetScrollOnFocus) return undefined;
+
+      const frameId = requestAnimationFrame(() => {
+        internalScrollRef.current?.scrollTo?.({ y: 0, animated: false });
+      });
+
+      return () => cancelAnimationFrame(frameId);
+    }, [scroll, resetScrollOnFocus])
+  );
+
   if (!scroll) {
     return (
       <SafeAreaView style={[styles.safe, style]}>
@@ -26,6 +63,7 @@ const Screen = ({ children, scroll = true, contentContainerStyle, style }) => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
       >
         <ScrollView
+          ref={assignScrollRef}
           contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"

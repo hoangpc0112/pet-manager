@@ -1,4 +1,17 @@
-import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, setDoc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  startAfter
+} from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export const getCollectionDocs = async (collectionName) => {
@@ -41,9 +54,39 @@ export const setDocument = async (collectionName, id, payload, merge = true) => 
   return id;
 };
 
+export const deleteDocument = async (collectionName, id) => {
+  const docRef = doc(db, collectionName, id);
+  await deleteDoc(docRef);
+  return id;
+};
+
 export const addDocument = async (collectionName, payload) => {
   const result = await addDoc(collection(db, collectionName), payload);
   return result.id;
+};
+
+export const getCollectionPage = async ({
+  collectionName,
+  pageSize = 10,
+  cursor = null,
+  orderByField = 'createdAt',
+  orderDirection = 'desc'
+}) => {
+  const constraints = [orderBy(orderByField, orderDirection), limit(pageSize)];
+  if (cursor) {
+    constraints.push(startAfter(cursor));
+  }
+
+  const q = query(collection(db, collectionName), ...constraints);
+  const snapshot = await getDocs(q);
+  const docs = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  const nextCursor = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
+
+  return {
+    docs,
+    nextCursor,
+    hasMore: snapshot.docs.length === pageSize
+  };
 };
 
 export const addCommunityPost = async (payload) => {

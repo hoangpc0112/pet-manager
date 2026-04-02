@@ -6,6 +6,15 @@ import Card from '../components/Card';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
 
+const parseVnDateToMs = (value) => {
+  if (!value || typeof value !== 'string') return Number.MAX_SAFE_INTEGER;
+  const parts = value.split('/').map((item) => Number.parseInt(item, 10));
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return Number.MAX_SAFE_INTEGER;
+  const [day, month, year] = parts;
+  const parsed = new Date(year, month - 1, day).getTime();
+  return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+};
+
 const PetDetailScreen = ({ navigation, route }) => {
   const { getPetById, journalEntries, pets, petQuickActions } = useAppData();
   const quickActions = petQuickActions || [];
@@ -24,92 +33,173 @@ const PetDetailScreen = ({ navigation, route }) => {
     (entry) => entry.category === 'Sức khỏe' || entry.title.toLowerCase().includes('triệu chứng')
   );
 
+  const petVaccinations = Array.isArray(selectedPet.vaccinations) ? selectedPet.vaccinations : [];
+  const upcomingVaccinations = petVaccinations
+    .filter((item) => item.status === 'pending' || item.status === 'overdue' || Boolean(item.nextDate))
+    .sort((a, b) => parseVnDateToMs(a.nextDate) - parseVnDateToMs(b.nextDate))
+    .slice(0, 4);
+
+  const recentAnalysisLogs = analysisLogs.slice(0, 2);
+  const recentPetLogs = petLogs.slice(0, 4);
+  const analysisIds = new Set(recentAnalysisLogs.map((entry) => entry.id));
+  const recentGeneralLogs = recentPetLogs.filter((entry) => !analysisIds.has(entry.id));
+  const journalPreview = [
+    ...recentAnalysisLogs.map((entry) => ({ ...entry, source: 'analysis' })),
+    ...recentGeneralLogs.map((entry) => ({ ...entry, source: 'journal' }))
+  ].slice(0, 4);
+
+  const handleQuickActionPress = (actionId) => {
+    if (actionId === 'log') navigation.navigate('PetNewLog', { preselectedPetId: selectedPet.id });
+    if (actionId === 'reminder') {
+      navigation.navigate('ReminderNew', { preselectedPetId: selectedPet.id });
+    }
+    if (actionId === 'vaccine') navigation.navigate('PetVaccines', { petId: selectedPet.id });
+  };
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.iconCircle} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{selectedPet.name}</Text>
+        <Text style={styles.headerTitle}>Chi tiết thú cưng</Text>
+        <TouchableOpacity
+          style={styles.iconCircle}
+          onPress={() => navigation.navigate('PetEdit', { petId: selectedPet.id })}
+        >
+          <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
+        </TouchableOpacity>
       </View>
 
-      <Card style={styles.profileCard}>
-        <Image source={{ uri: selectedPet.imageUrl }} style={styles.petImage} resizeMode="cover" />
-        <View style={styles.petInfo}>
-          <Text style={styles.petName}>{selectedPet.name}</Text>
-          <Text style={styles.petMeta}>{selectedPet.breed}</Text>
-          <Text style={styles.petMeta}>{selectedPet.gender} • {selectedPet.age}</Text>
-          <Text style={styles.petMeta}>Cân nặng: {selectedPet.weight}</Text>
+      <Card style={styles.heroCard}>
+        <View style={styles.heroTopRow}>
+          <Image source={{ uri: selectedPet.imageUrl }} style={styles.heroImage} resizeMode="cover" />
+          <View style={styles.heroInfo}>
+            <Text style={styles.heroName}>{selectedPet.name}</Text>
+            <Text style={styles.heroBreed}>{selectedPet.breed}</Text>
+            <Text style={styles.heroHint}>Thông tin chăm sóc mới nhất</Text>
+          </View>
+        </View>
+
+        <View style={styles.metaChipRow}>
+          <View style={styles.metaChip}>
+            <Ionicons name="male-female-outline" size={14} color={theme.colors.primary} />
+            <Text style={styles.metaChipText}>{selectedPet.gender}</Text>
+          </View>
+          <View style={styles.metaChip}>
+            <Ionicons name="calendar-outline" size={14} color={theme.colors.primary} />
+            <Text style={styles.metaChipText}>{selectedPet.age}</Text>
+          </View>
+          <View style={styles.metaChip}>
+            <Ionicons name="barbell-outline" size={14} color={theme.colors.primary} />
+            <Text style={styles.metaChipText}>{selectedPet.weight}</Text>
+          </View>
         </View>
       </Card>
 
       <Text style={styles.sectionLabel}>THAO TÁC NHANH</Text>
-      <Card style={styles.card}>
-        {quickActions.map((action, index) => (
+      <View style={styles.quickGrid}>
+        {quickActions.map((action) => (
           <TouchableOpacity
             key={action.id}
-            onPress={() => {
-              if (action.id === 'log') navigation.navigate('PetNewLog', { preselectedPetId: selectedPet.id });
-              if (action.id === 'reminder') navigation.navigate('Tabs', { screen: 'Reminders' });
-              if (action.id === 'vaccine') navigation.navigate('PetVaccines');
-            }}
-            style={[styles.actionRow, index === quickActions.length - 1 && styles.lastRow]}
+            onPress={() => handleQuickActionPress(action.id)}
+            style={styles.quickTile}
+            activeOpacity={0.9}
           >
-            <View style={styles.actionIcon}>
+            <View style={styles.quickTileIcon}>
               <Ionicons name={action.icon} size={18} color={theme.colors.primary} />
             </View>
-            <View style={styles.actionText}>
-              <Text style={styles.actionTitle}>{action.title}</Text>
-              <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={theme.colors.textLight} />
+            <Text style={styles.quickTileTitle}>{action.title}</Text>
+            <Text style={styles.quickTileSubtitle} numberOfLines={2}>{action.subtitle}</Text>
           </TouchableOpacity>
         ))}
-      </Card>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('SymptomStep1', { preselectedPetId: selectedPet.id })}
+          style={styles.quickTile}
+          activeOpacity={0.9}
+        >
+          <View style={styles.quickTileIcon}>
+            <Ionicons name="medkit-outline" size={18} color={theme.colors.primary} />
+          </View>
+          <Text style={styles.quickTileTitle}>Kiểm tra triệu chứng</Text>
+          <Text style={styles.quickTileSubtitle} numberOfLines={2}>Đánh giá nhanh sức khỏe thú cưng</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.sectionLabel}>NHẬT KÝ LIÊN QUAN</Text>
-      <Card style={styles.card}>
-        {analysisLogs.length > 0 ? (
-          <View style={styles.logGroup}>
-            <Text style={styles.logGroupTitle}>Kết quả phân tích gần đây</Text>
-            {analysisLogs.slice(0, 2).map((entry, index) => (
-              <View key={entry.id} style={[styles.logRow, index === analysisLogs.slice(0, 2).length - 1 && styles.lastRow]}>
-                <Text style={styles.logTitle}>{entry.title}</Text>
-                <Text style={styles.logMeta}>{entry.date}</Text>
-                <Text style={styles.logNote}>{entry.note}</Text>
+      <View style={styles.sectionBlock}>
+        {journalPreview.length > 0 ? (
+          journalPreview.map((entry) => (
+            <View key={`journal-${entry.id}`} style={styles.streamCard}>
+              <View style={[styles.streamAccent, entry.source === 'analysis' ? styles.streamAccentAlert : styles.streamAccentInfo]} />
+              <View style={styles.streamBody}>
+                <View style={styles.streamTopRow}>
+                  <Text style={styles.streamTitle} numberOfLines={1}>{entry.title}</Text>
+                  <Text style={styles.streamMeta}>{entry.date}</Text>
+                </View>
+                <Text style={styles.streamNote} numberOfLines={2}>{entry.note}</Text>
+                <View style={[styles.streamTag, entry.source === 'analysis' ? styles.streamTagAlert : styles.streamTagNormal]}>
+                  <Text style={[styles.streamTagText, entry.source === 'analysis' ? styles.streamTagTextAlert : styles.streamTagTextNormal]}>
+                    {entry.source === 'analysis' ? 'Phân tích' : 'Nhật ký'}
+                  </Text>
+                </View>
               </View>
-            ))}
-          </View>
-        ) : null}
-
-        {petLogs.length > 0 ? (
-          <View style={styles.logGroup}>
-            <Text style={styles.logGroupTitle}>Nhật ký của {selectedPet.name}</Text>
-            {petLogs.slice(0, 4).map((entry, index) => (
-              <View key={`pet-${entry.id}`} style={[styles.logRow, index === petLogs.slice(0, 4).length - 1 && styles.lastRow]}>
-                <Text style={styles.logTitle}>{entry.title}</Text>
-                <Text style={styles.logMeta}>{entry.date}</Text>
-                <Text style={styles.logNote}>{entry.note}</Text>
-              </View>
-            ))}
-          </View>
+            </View>
+          ))
         ) : (
-          <View style={styles.emptyLogWrap}>
-            <Text style={styles.emptyLogText}>Chưa có nhật ký cho thú cưng này.</Text>
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>Chưa có nhật ký cho thú cưng này.</Text>
           </View>
         )}
 
-        <TouchableOpacity style={[styles.actionRow, styles.logAction]} onPress={() => navigation.navigate('Tabs', { screen: 'Journal' })}>
-          <View style={styles.actionIcon}>
-            <Ionicons name="document-text" size={18} color={theme.colors.primary} />
-          </View>
-          <View style={styles.actionText}>
-            <Text style={styles.actionTitle}>Xem tất cả nhật ký</Text>
-            <Text style={styles.actionSubtitle}>Mở danh sách nhật ký chi tiết</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={theme.colors.textLight} />
+        <TouchableOpacity style={styles.sectionActionButton} onPress={() => navigation.navigate('Tabs', { screen: 'Journal' })}>
+          <Text style={styles.sectionActionText}>Xem tất cả nhật ký</Text>
+          <Ionicons name="arrow-forward" size={14} color={theme.colors.primary} />
         </TouchableOpacity>
-      </Card>
+      </View>
+
+      <Text style={styles.sectionLabel}>MŨI TIÊM SẮP TỚI</Text>
+      <View style={styles.sectionBlock}>
+        {upcomingVaccinations.length > 0 ? (
+          upcomingVaccinations.map((item) => (
+            <View key={`vac-${item.id}`} style={styles.streamCard}>
+              <View
+                style={[
+                  styles.streamAccent,
+                  item.status === 'overdue' ? styles.streamAccentDanger : styles.streamAccentHealthy
+                ]}
+              />
+              <View style={styles.streamBody}>
+                <View style={styles.streamTopRow}>
+                  <Text style={styles.streamTitle}>{item.name}</Text>
+                  <View
+                    style={[
+                      styles.vaccineStatusBadge,
+                      item.status === 'pending' && styles.vaccineStatusPending,
+                      item.status === 'overdue' && styles.vaccineStatusOverdue,
+                      item.status === 'done' && styles.vaccineStatusDone
+                    ]}
+                  >
+                    <Text style={styles.vaccineStatusText}>{item.statusLabel || 'Chưa tiêm'}</Text>
+                  </View>
+                </View>
+                <Text style={styles.streamMeta}>Lịch tiêm: {item.nextDate || 'Chưa đặt lịch'}</Text>
+                <Text style={styles.streamMeta}>Ngày đã tiêm: {item.doneDate || 'Chưa tiêm'}</Text>
+                {item.note ? <Text style={styles.streamNote} numberOfLines={2}>{item.note}</Text> : null}
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>Chưa có mũi tiêm sắp tới.</Text>
+          </View>
+        )}
+
+        <TouchableOpacity style={styles.sectionActionButton} onPress={() => navigation.navigate('PetVaccines', { petId: selectedPet.id })}>
+          <Text style={styles.sectionActionText}>Xem tất cả mũi tiêm</Text>
+          <Ionicons name="arrow-forward" size={14} color={theme.colors.primary} />
+        </TouchableOpacity>
+      </View>
     </Screen>
   );
 };
@@ -122,130 +212,236 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: theme.spacing.md
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.lg
   },
-  back: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  backText: {
-    color: theme.colors.primary,
-    marginLeft: 6,
-    fontWeight: '600'
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadow.card
   },
   headerTitle: {
-    flex: 1,
-    textAlign: 'center',
     ...theme.typography.h3,
-    marginRight: 28
+    color: theme.colors.text
   },
-  profileCard: {
+  heroCard: {
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md
+  },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center'
   },
-  petImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 20,
-    marginRight: 16
+  heroImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    marginRight: 14
   },
-  petInfo: {
+  heroInfo: {
     flex: 1
   },
-  petName: {
+  heroName: {
     ...theme.typography.h2,
     color: theme.colors.text
   },
-  petMeta: {
+  heroBreed: {
+    ...theme.typography.body,
+    color: theme.colors.text,
+    marginTop: 2
+  },
+  heroHint: {
     ...theme.typography.caption,
     color: theme.colors.textMuted,
     marginTop: 6
+  },
+  metaChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+    gap: 8
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    backgroundColor: '#EEF4FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  metaChipText: {
+    ...theme.typography.small,
+    color: theme.colors.text,
+    marginLeft: 6,
+    fontWeight: '600'
   },
   sectionLabel: {
     ...theme.typography.caption,
     color: theme.colors.textLight,
     letterSpacing: 1.4,
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.md,
     marginBottom: theme.spacing.md,
     fontWeight: '600'
   },
-  card: {
-    padding: 0
-  },
-  actionRow: {
+  quickGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10
   },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+  quickTile: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.card
+  },
+  quickTileIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: theme.colors.primarySoft,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    marginBottom: 8
   },
-  actionText: {
-    flex: 1,
-    marginLeft: 12
-  },
-  actionTitle: {
-    ...theme.typography.body,
-    fontWeight: '700'
-  },
-  actionSubtitle: {
-    ...theme.typography.caption,
-    color: theme.colors.textMuted,
-    marginTop: 4
-  },
-  lastRow: {
-    borderBottomWidth: 0
-  },
-  logGroup: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg
-  },
-  logGroupTitle: {
-    ...theme.typography.caption,
-    color: theme.colors.textMuted,
-    marginBottom: 10,
-    fontWeight: '600'
-  },
-  logRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    paddingBottom: 10,
-    marginBottom: 10
-  },
-  logTitle: {
-    ...theme.typography.body,
-    fontWeight: '700'
-  },
-  logMeta: {
-    ...theme.typography.small,
-    color: theme.colors.textLight,
-    marginTop: 4
-  },
-  logNote: {
+  quickTileTitle: {
     ...theme.typography.caption,
     color: theme.colors.text,
+    fontWeight: '700'
+  },
+  quickTileSubtitle: {
+    ...theme.typography.small,
+    color: theme.colors.textMuted,
+    marginTop: 4
+  },
+  sectionBlock: {
+    marginBottom: theme.spacing.md
+  },
+  streamCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.card
+  },
+  streamAccent: {
+    width: 6
+  },
+  streamAccentAlert: {
+    backgroundColor: '#F59E0B'
+  },
+  streamAccentInfo: {
+    backgroundColor: '#1677FF'
+  },
+  streamAccentHealthy: {
+    backgroundColor: '#22C55E'
+  },
+  streamAccentDanger: {
+    backgroundColor: '#EF4444'
+  },
+  streamBody: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12
+  },
+  streamTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8
+  },
+  streamTitle: {
+    ...theme.typography.body,
+    fontWeight: '700',
+    color: theme.colors.text,
+    flex: 1
+  },
+  streamMeta: {
+    ...theme.typography.small,
+    color: theme.colors.textLight
+  },
+  streamNote: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
     marginTop: 6
   },
-  emptyLogWrap: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.lg
+  streamTag: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    marginTop: 8
   },
-  emptyLogText: {
+  streamTagNormal: {
+    backgroundColor: '#EEF4FF'
+  },
+  streamTagAlert: {
+    backgroundColor: '#FEF3C7'
+  },
+  streamTagText: {
+    ...theme.typography.small,
+    fontWeight: '700'
+  },
+  streamTagTextNormal: {
+    color: '#0F4AA1'
+  },
+  streamTagTextAlert: {
+    color: '#92400E'
+  },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow.card
+  },
+  emptyText: {
     ...theme.typography.caption,
     color: theme.colors.textMuted
   },
-  logAction: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    borderBottomWidth: 0
+  sectionActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 4
+  },
+  sectionActionText: {
+    ...theme.typography.caption,
+    color: theme.colors.primary,
+    fontWeight: '700',
+    marginRight: 4
+  },
+  vaccineStatusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  vaccineStatusPending: {
+    backgroundColor: '#FEF3C7'
+  },
+  vaccineStatusOverdue: {
+    backgroundColor: '#FEE2E2'
+  },
+  vaccineStatusDone: {
+    backgroundColor: '#DCFCE7'
+  },
+  vaccineStatusText: {
+    ...theme.typography.small,
+    color: theme.colors.text,
+    fontWeight: '700'
   }
 });
 

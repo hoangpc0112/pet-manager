@@ -4,16 +4,21 @@ import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import Chip from '../components/Chip';
+import PaginationControls from '../components/PaginationControls';
 import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
 
-const SymptomStep1Screen = ({ navigation }) => {
+const PAGE_SIZE = 5;
+
+const SymptomStep1Screen = ({ navigation, route }) => {
   const { pets, symptomGroups } = useAppData();
   const groups = symptomGroups || [];
-  const [selectedPetId, setSelectedPetId] = useState(pets[0]?.id || '');
+  const preselectedPetId = route?.params?.preselectedPetId || '';
+  const [selectedPetId, setSelectedPetId] = useState(preselectedPetId || pets[0]?.id || '');
   const [selectedGroupId, setSelectedGroupId] = useState(groups[0]?.id || '');
+  const [currentPage, setCurrentPage] = useState(1);
   const petImageSources = useMemo(
     () =>
       pets.reduce((acc, pet) => {
@@ -25,6 +30,11 @@ const SymptomStep1Screen = ({ navigation }) => {
     [pets]
   );
   const selectedPet = useMemo(() => pets.find((item) => item.id === selectedPetId), [pets, selectedPetId]);
+  const totalPages = Math.max(1, Math.ceil(pets.length / PAGE_SIZE));
+  const visiblePets = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return pets.slice(start, start + PAGE_SIZE);
+  }, [pets, currentPage]);
 
   useEffect(() => {
     if (!selectedPetId && pets.length > 0) {
@@ -33,10 +43,27 @@ const SymptomStep1Screen = ({ navigation }) => {
   }, [pets, selectedPetId]);
 
   useEffect(() => {
+    if (!preselectedPetId) return;
+
+    const matchedPet = pets.find((item) => item.id === preselectedPetId);
+    if (!matchedPet) return;
+
+    setSelectedPetId(preselectedPetId);
+    const selectedIndex = pets.findIndex((item) => item.id === preselectedPetId);
+    if (selectedIndex >= 0) {
+      setCurrentPage(Math.floor(selectedIndex / PAGE_SIZE) + 1);
+    }
+  }, [pets, preselectedPetId]);
+
+  useEffect(() => {
     if (!selectedGroupId && groups.length > 0) {
       setSelectedGroupId(groups[0].id);
     }
   }, [groups, selectedGroupId]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [pets.length, totalPages]);
 
   return (
     <Screen contentContainerStyle={styles.container}>
@@ -52,7 +79,7 @@ const SymptomStep1Screen = ({ navigation }) => {
       <ProgressSteps total={4} current={1} />
 
       <Card style={styles.card}>
-        {pets.map((pet) => (
+        {visiblePets.map((pet) => (
           <TouchableOpacity
             key={pet.id}
             style={[styles.petRow, selectedPetId === pet.id && styles.petRowSelected]}
@@ -78,6 +105,8 @@ const SymptomStep1Screen = ({ navigation }) => {
             {selectedPetId === pet.id ? <Text style={styles.petSelected}>Đã chọn</Text> : null}
           </TouchableOpacity>
         ))}
+
+        <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
       </Card>
 
       <Card style={styles.card}>

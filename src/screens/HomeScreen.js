@@ -74,7 +74,7 @@ const HomeScreen = ({ navigation }) => {
 
       <Text style={styles.sectionLabel}>CỘNG ĐỒNG</Text>
       <Card>
-        <Text style={styles.communityText}>Bạn có {communityPosts.length} bài trong cộng đồng, trong đó {reviewCount} bài review.</Text>
+        <Text style={styles.communityText}>Hiện có {communityPosts.length} bài trong cộng đồng, trong đó {reviewCount} bài review.</Text>
         <TouchableOpacity style={styles.communityButton} onPress={() => navigation.navigate('Community')}>
           <Text style={styles.communityButtonText}>Đến Cộng đồng</Text>
         </TouchableOpacity>

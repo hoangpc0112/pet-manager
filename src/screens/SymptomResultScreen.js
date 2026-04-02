@@ -1,4 +1,4 @@
-﻿import React from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,41 +9,67 @@ import PrimaryButton from '../components/PrimaryButton';
 import GhostButton from '../components/GhostButton';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
-
-const getRiskSummary = (severity, symptomCount) => {
-  if (severity >= 4 || symptomCount >= 4) {
-    return {
-      riskTitle: 'Nguy cơ cao, nên liên hệ phòng khám sớm',
-      riskBadge: 'Cao'
-    };
-  }
-  if (severity === 3 || symptomCount >= 2) {
-    return {
-      riskTitle: 'Cần theo dõi sát trong 24 giờ tới',
-      riskBadge: 'Theo dõi'
-    };
-  }
-  return {
-    riskTitle: 'Mức độ nhẹ, tiếp tục theo dõi tại nhà',
-    riskBadge: 'Nhẹ'
-  };
-};
+import { analyzeSymptomsWithFirebase } from '../services/symptomAnalysis';
 
 const SymptomResultScreen = ({ navigation, route }) => {
-  const { saveJournalEntry, resultSteps, resultWarnings } = useAppData();
+  const { saveJournalEntry } = useAppData();
   const payload = route?.params || {};
-  const summary = getRiskSummary(payload.severity || 1, (payload.symptoms || []).length);
-  const steps = resultSteps || [];
-  const warnings = resultWarnings || [];
+  const [analysisText, setAnalysisText] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(true);
+  const [analysisError, setAnalysisError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const runAnalysis = async () => {
+      setIsAnalyzing(true);
+      setAnalysisError('');
+      try {
+        const rawText = await analyzeSymptomsWithFirebase(payload);
+        if (isMounted) {
+          setAnalysisText(rawText);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setAnalysisText('');
+          setAnalysisError('Không thể lấy kết quả từ AI. Vui lòng thử lại.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsAnalyzing(false);
+        }
+      }
+    };
+
+    runAnalysis();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [payload]);
 
   const handleSaveToJournal = () => {
+    if (!analysisText.trim()) {
+      Alert.alert('Chưa có kết quả AI', 'Không thể lưu nhật ký khi chưa nhận được phân tích từ AI.');
+      return;
+    }
+
     saveJournalEntry({
       title: `Theo dõi triệu chứng - ${payload.selectedGroupLabel || 'Khác'}`,
       pet: payload.selectedPetName || 'Chưa chọn',
       date: new Date().toLocaleDateString('vi-VN'),
-      note: `Triệu chứng: ${(payload.symptoms || []).join(', ') || 'Chưa có'} | Mức độ: ${payload.severity || 1}/5 | Đánh giá: ${summary.riskBadge}`,
+      note: analysisText,
       category: 'Sức khỏe',
-      imageUrl: payload?.symptomImageDataUri || null
+      imageUrl: payload?.symptomImageDataUri || null,
+      aiRawResponse: analysisText,
+      symptomSnapshot: {
+        group: payload.selectedGroupLabel || 'Khác',
+        duration: payload.duration || '',
+        energy: payload.energy || '',
+        appetite: payload.appetite || '',
+        severity: payload.severity || 1,
+        symptoms: payload.symptoms || []
+      }
     });
 
     Alert.alert('Đã lưu', 'Bản ghi đã được lưu vào Nhật ký.', [
@@ -72,36 +98,10 @@ const SymptomResultScreen = ({ navigation, route }) => {
       <ProgressSteps total={4} current={4} />
 
       <Card style={styles.card}>
-        <Text style={styles.cardLabel}>Mức rủi ro hiện tại</Text>
-        <View style={styles.riskRow}>
-          <Text style={styles.riskText}>{summary.riskTitle}</Text>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{summary.riskBadge}</Text>
-          </View>
-        </View>
-      </Card>
-
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Bước tiếp theo</Text>
-        {steps.map((step) => (
-          <View key={step} style={styles.listRow}>
-            <View style={styles.dot} />
-            <Text style={styles.listText}>{step}</Text>
-          </View>
-        ))}
-      </Card>
-
-      <Card style={[styles.card, styles.warningCard]}>
-        <View style={styles.warningHeader}>
-          <Ionicons name="warning" size={18} color={theme.colors.danger} />
-          <Text style={styles.warningTitle}>Dấu hiệu cần đi khám ngay</Text>
-        </View>
-        {warnings.map((warn) => (
-          <View key={warn} style={styles.listRow}>
-            <View style={[styles.dot, styles.dotDanger]} />
-            <Text style={styles.listText}>{warn}</Text>
-          </View>
-        ))}
+        <Text style={styles.cardLabel}>Phản hồi từ AI</Text>
+        {isAnalyzing ? <Text style={styles.loading}>Đang phân tích ...</Text> : null}
+        {analysisError ? <Text style={styles.errorText}>{analysisError}</Text> : null}
+        {analysisText ? <Text style={styles.rawText}>{analysisText}</Text> : null}
       </Card>
 
       <PrimaryButton label="Lưu vào nhật ký" onPress={handleSaveToJournal} style={styles.primaryButton} />
@@ -156,80 +156,28 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: theme.colors.textMuted
   },
-  riskRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 10
-  },
-  riskText: {
-    ...theme.typography.body,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 12
-  },
-  badge: {
-    backgroundColor: theme.colors.badge,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12
-  },
-  badgeText: {
-    color: '#F97316',
-    fontWeight: '600',
-    fontSize: 12
-  },
-  sectionTitle: {
-    ...theme.typography.body,
-    fontWeight: '700',
-    marginBottom: theme.spacing.md
-  },
-  listRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 10
-  },
-  listText: {
+  rawText: {
     ...theme.typography.caption,
     color: theme.colors.text,
-    flex: 1
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.text,
-    marginTop: 6,
-    marginRight: 8
-  },
-  warningCard: {
-    backgroundColor: theme.colors.dangerSoft,
-    borderWidth: 1,
-    borderColor: '#FCA5A5'
-  },
-  warningHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10
-  },
-  warningTitle: {
-    marginLeft: 8,
-    fontWeight: '700',
-    color: theme.colors.danger
-  },
-  dotDanger: {
-    backgroundColor: theme.colors.danger
+    marginTop: 10,
+    lineHeight: 20
   },
   primaryButton: {
     marginTop: theme.spacing.lg
   },
   ghostButton: {
-    marginTop: theme.spacing.md
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.lg
   },
   loading: {
     ...theme.typography.body,
     color: theme.colors.textMuted,
     marginTop: theme.spacing.md
+  },
+  errorText: {
+    ...theme.typography.caption,
+    color: theme.colors.danger,
+    marginTop: 8
   }
 });
 

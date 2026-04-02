@@ -10,6 +10,39 @@ import { getCollectionPage } from '../services/firestore';
 
 const PAGE_SIZE = 5;
 const ALL_PETS_FILTER = 'ALL';
+const SUMMARY_MAX_CHARS = 120;
+
+const getEntryTimestamp = (entry) => {
+  if (typeof entry?.createdAt === 'number') return entry.createdAt;
+
+  const rawDate = `${entry?.date || ''}`.trim();
+  const dateMatch = rawDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dateMatch) {
+    const day = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]) - 1;
+    const year = Number(dateMatch[3]);
+    return new Date(year, month, day).getTime();
+  }
+
+  const parsed = Date.parse(rawDate);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const sortEntriesClosestToNow = (entries = []) => {
+  const now = Date.now();
+  return [...entries].sort((a, b) => {
+    const distanceA = Math.abs(now - getEntryTimestamp(a));
+    const distanceB = Math.abs(now - getEntryTimestamp(b));
+    return distanceA - distanceB;
+  });
+};
+
+const summarizeEntry = (entry) => {
+  const source = `${entry?.note || ''}`.replace(/\s+/g, ' ').trim();
+  if (!source) return '...';
+  if (source.length <= SUMMARY_MAX_CHARS) return `${source}...`;
+  return `${source.slice(0, SUMMARY_MAX_CHARS).trim()}...`;
+};
 
 const JournalScreen = ({ navigation }) => {
   const { journalEntries, deleteJournalEntry, pets } = useAppData();
@@ -36,8 +69,8 @@ const JournalScreen = ({ navigation }) => {
   }, [selectedPetFilter, petFilterOptions]);
 
   const filteredEntries = useMemo(() => {
-    if (selectedPetFilter === ALL_PETS_FILTER) return journalEntries;
-    return journalEntries.filter((entry) => entry.pet === selectedPetFilter);
+    if (selectedPetFilter === ALL_PETS_FILTER) return sortEntriesClosestToNow(journalEntries);
+    return sortEntriesClosestToNow(journalEntries.filter((entry) => entry.pet === selectedPetFilter));
   }, [journalEntries, selectedPetFilter]);
 
   const filteredPageEntries = useMemo(() => {
@@ -142,6 +175,13 @@ const JournalScreen = ({ navigation }) => {
     ]);
   };
 
+  const openDetail = (entry) => {
+    navigation.navigate('JournalDetail', {
+      entryId: entry.id,
+      entry
+    });
+  };
+
   return (
     <Screen contentContainerStyle={styles.container} scrollViewRef={scrollRef}>
       <View style={styles.headerRow}>
@@ -189,7 +229,11 @@ const JournalScreen = ({ navigation }) => {
                 <Ionicons name="trash-outline" size={18} color={theme.colors.danger} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.entryNote}>{entry.note}</Text>
+            <Text style={styles.entryNote}>{summarizeEntry(entry)}</Text>
+            <TouchableOpacity style={styles.detailButton} onPress={() => openDetail(entry)}>
+              <Text style={styles.detailButtonText}>Xem chi tiet</Text>
+              <Ionicons name="chevron-forward" size={14} color={theme.colors.primary} />
+            </TouchableOpacity>
           </Card>
         ))
       ) : (
@@ -380,6 +424,18 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: theme.colors.text,
     marginTop: 10
+  },
+  detailButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  detailButtonText: {
+    ...theme.typography.caption,
+    color: theme.colors.primary,
+    fontWeight: '700',
+    marginRight: 2
   },
   deleteButton: {
     width: 34,

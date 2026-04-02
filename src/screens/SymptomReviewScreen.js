@@ -110,7 +110,8 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   ghost: {
-    marginTop: theme.spacing.lg
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.md
   },
   loading: {
     ...theme.typography.body,

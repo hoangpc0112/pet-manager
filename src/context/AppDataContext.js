@@ -238,6 +238,9 @@ export const AppDataProvider = ({ children }) => {
       note: entry.note,
       category: entry.category || 'Khác',
       imageUrl: entry.imageUrl || null,
+      aiAnalysis: entry.aiAnalysis || null,
+      aiRawResponse: entry.aiRawResponse || null,
+      symptomSnapshot: entry.symptomSnapshot || null,
       createdAt: Date.now()
     };
     setJournalEntries((prev) => [nextEntry, ...prev]);

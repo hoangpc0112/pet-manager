@@ -19,6 +19,7 @@ import PetSwitcherScreen from '../screens/PetSwitcherScreen';
 import PetEditScreen from '../screens/PetEditScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import ReminderNewScreen from '../screens/ReminderNewScreen';
+import JournalDetailScreen from '../screens/JournalDetailScreen';
 import SignInScreen from '../screens/SignInScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import AuthOtpScreen from '../screens/AuthOtpScreen';
@@ -78,6 +79,7 @@ const RootNavigator = () => {
       <Stack.Screen name="PetEdit" component={PetEditScreen} />
       <Stack.Screen name="ProfileEdit" component={EditProfileScreen} />
       <Stack.Screen name="ReminderNew" component={ReminderNewScreen} />
+      <Stack.Screen name="JournalDetail" component={JournalDetailScreen} />
     </Stack.Navigator>
   );
 };

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Tabs from './Tabs';
 import SymptomStep1Screen from '../screens/SymptomStep1Screen';
@@ -17,14 +18,22 @@ import PetNewScreen from '../screens/PetNewScreen';
 import PetSwitcherScreen from '../screens/PetSwitcherScreen';
 import SignInScreen from '../screens/SignInScreen';
 import SignUpScreen from '../screens/SignUpScreen';
-import AuthMethodScreen from '../screens/AuthMethodScreen';
-import AuthPhoneScreen from '../screens/AuthPhoneScreen';
 import AuthOtpScreen from '../screens/AuthOtpScreen';
+import { useAuth } from '../context/AuthContext';
+import theme from '../theme';
 
 const Stack = createNativeStackNavigator();
 
 const RootNavigator = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { isAuthenticated, isAuthLoading, signOut } = useAuth();
+
+  if (isAuthLoading) {
+    return (
+      <View style={styles.loadingWrap}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -33,17 +42,9 @@ const RootNavigator = () => {
           headerShown: false
         }}
       >
-        <Stack.Screen name="SignIn">
-          {(props) => <SignInScreen {...props} onAuthenticated={() => setIsAuthenticated(true)} />}
-        </Stack.Screen>
-        <Stack.Screen name="SignUp">
-          {(props) => <SignUpScreen {...props} onAuthenticated={() => setIsAuthenticated(true)} />}
-        </Stack.Screen>
-        <Stack.Screen name="AuthMethod" component={AuthMethodScreen} />
-        <Stack.Screen name="AuthPhone" component={AuthPhoneScreen} />
-        <Stack.Screen name="AuthOtp">
-          {(props) => <AuthOtpScreen {...props} onAuthenticated={() => setIsAuthenticated(true)} />}
-        </Stack.Screen>
+        <Stack.Screen name="SignIn" component={SignInScreen} />
+        <Stack.Screen name="SignUp" component={SignUpScreen} />
+        <Stack.Screen name="AuthOtp" component={AuthOtpScreen} />
       </Stack.Navigator>
     );
   }
@@ -55,7 +56,7 @@ const RootNavigator = () => {
       }}
     >
       <Stack.Screen name="Tabs">
-        {(props) => <Tabs {...props} onLogout={() => setIsAuthenticated(false)} />}
+        {(props) => <Tabs {...props} onLogout={signOut} />}
       </Stack.Screen>
       <Stack.Screen name="SymptomStep1" component={SymptomStep1Screen} />
       <Stack.Screen name="SymptomStep2" component={SymptomStep2Screen} />
@@ -74,5 +75,14 @@ const RootNavigator = () => {
     </Stack.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.background
+  }
+});
 
 export default RootNavigator;

@@ -3,19 +3,52 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } fro
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
+import { useAuth } from '../context/AuthContext';
+import { getAuthErrorMessage } from '../services/auth';
 import theme from '../theme';
 
-const SignUpScreen = ({ navigation, onAuthenticated }) => {
+const SignUpScreen = ({ navigation }) => {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [errorText, setErrorText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { requestSignUpOtp } = useAuth();
 
   const canSubmit =
     displayName.trim().length > 0 &&
     email.trim().length > 0 &&
     password.length > 0 &&
     password === confirmPassword;
+
+  const handleSignUp = async () => {
+    if (isSubmitting) return;
+    if (!canSubmit) {
+      setErrorText('Vui lòng kiểm tra lại thông tin đăng ký.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrorText('');
+      const payload = await requestSignUpOtp({
+        displayName: displayName.trim(),
+        email: email.trim(),
+        password
+      });
+
+      navigation.navigate('AuthOtp', {
+        verificationId: payload.verificationId,
+        email: payload.email,
+        debugOtp: payload.debugOtp
+      });
+    } catch (error) {
+      setErrorText(getAuthErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Screen scroll={false} contentContainerStyle={styles.screenContent}>
@@ -74,10 +107,12 @@ const SignUpScreen = ({ navigation, onAuthenticated }) => {
           ) : null}
 
           <PrimaryButton
-            label="Đăng ký"
-            onPress={() => canSubmit && onAuthenticated()}
+            label={isSubmitting ? 'Đang gửi OTP...' : 'Gửi OTP qua email'}
+            onPress={handleSignUp}
             style={styles.primaryAction}
           />
+
+          {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
         </Card>
 
         <View style={styles.footerRow}>

@@ -3,16 +3,34 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } fro
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
-import GhostButton from '../components/GhostButton';
+import { useAuth } from '../context/AuthContext';
+import { getAuthErrorMessage } from '../services/auth';
 import theme from '../theme';
 
-const SignInScreen = ({ navigation, onAuthenticated }) => {
+const SignInScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorText, setErrorText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { signIn } = useAuth();
 
-  const handleSignIn = () => {
-    if (!email || !password) return;
-    onAuthenticated();
+  const handleSignIn = async () => {
+    if (isSubmitting) return;
+
+    if (!email.trim() || !password) {
+      setErrorText('Vui lòng nhập đầy đủ email và mật khẩu.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrorText('');
+      await signIn({ email: email.trim(), password });
+    } catch (error) {
+      setErrorText(getAuthErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -49,15 +67,12 @@ const SignInScreen = ({ navigation, onAuthenticated }) => {
           />
 
           <PrimaryButton
-            label="Đăng nhập"
+            label={isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
             onPress={handleSignIn}
             style={styles.primaryAction}
           />
 
-          <GhostButton
-            label="Đăng nhập bằng số điện thoại"
-            onPress={() => navigation.navigate('AuthMethod')}
-          />
+          {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
         </Card>
 
         <View style={styles.footerRow}>
@@ -117,7 +132,11 @@ const styles = StyleSheet.create({
     ...theme.typography.bodyRegular
   },
   primaryAction: {
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.lg
+  },
+  errorText: {
+    ...theme.typography.small,
+    color: theme.colors.danger,
     marginBottom: theme.spacing.sm
   },
   footerRow: {

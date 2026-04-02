@@ -3,15 +3,65 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } fro
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
+import { useAuth } from '../context/AuthContext';
+import { getAuthErrorMessage } from '../services/auth';
 import theme from '../theme';
 
-const AuthOtpScreen = ({ route, onAuthenticated }) => {
+const AuthOtpScreen = ({ route, navigation }) => {
+  const debugOtp = route?.params?.debugOtp || '';
   const [otpCode, setOtpCode] = useState('');
-  const phone = route?.params?.phone || '';
+  const [errorText, setErrorText] = useState('');
+  const [resendMessage, setResendMessage] = useState('');
+  const [debugOtpLocal, setDebugOtpLocal] = useState(debugOtp);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const email = route?.params?.email || '';
+  const verificationId = route?.params?.verificationId || '';
+  const { verifySignUpOtp, resendSignUpOtp } = useAuth();
 
-  const handleVerify = () => {
-    if (otpCode.trim().length < 4) return;
-    onAuthenticated();
+  const handleVerify = async () => {
+    if (isSubmitting) return;
+    if (!verificationId) {
+      setErrorText('Không tìm thấy phiên OTP. Vui lòng yêu cầu mã mới.');
+      return;
+    }
+    if (otpCode.trim().length < 6) {
+      setErrorText('Vui lòng nhập đủ 6 số OTP.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrorText('');
+      await verifySignUpOtp({ verificationId, otpCode: otpCode.trim() });
+    } catch (error) {
+      setErrorText(getAuthErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (isResending || isSubmitting) return;
+    if (!verificationId) {
+      setErrorText('Không tìm thấy phiên OTP. Vui lòng đăng ký lại.');
+      return;
+    }
+
+    try {
+      setIsResending(true);
+      setErrorText('');
+      setResendMessage('');
+      const payload = await resendSignUpOtp({ verificationId });
+      if (__DEV__) {
+        setDebugOtpLocal(payload.debugOtp || '');
+      }
+      setResendMessage('Đã gửi lại mã OTP. Vui lòng kiểm tra email.');
+    } catch (error) {
+      setErrorText(getAuthErrorMessage(error));
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -21,8 +71,8 @@ const AuthOtpScreen = ({ route, onAuthenticated }) => {
         style={styles.keyboardContainer}
       >
         <View style={styles.headerWrap}>
-          <Text style={styles.title}>Nhập mã OTP</Text>
-          <Text style={styles.subtitle}>Mã xác thực đã được gửi đến {phone || 'số điện thoại của bạn'}.</Text>
+          <Text style={styles.title}>Xác thực email</Text>
+          <Text style={styles.subtitle}>Mã OTP đã được gửi đến {email || 'email của bạn'}.</Text>
         </View>
 
         <Card style={styles.formCard}>
@@ -30,14 +80,34 @@ const AuthOtpScreen = ({ route, onAuthenticated }) => {
           <TextInput
             value={otpCode}
             onChangeText={setOtpCode}
-            placeholder="Nhập 4-6 số"
+            placeholder="Nhập 6 số"
             placeholderTextColor={theme.colors.textLight}
             keyboardType="number-pad"
             maxLength={6}
             style={styles.input}
           />
 
-          <PrimaryButton label="Xác thực" onPress={handleVerify} style={styles.primaryAction} />
+          {__DEV__ && debugOtpLocal ? (
+            <Text style={styles.devHint}>Mã OTP demo: {debugOtpLocal}</Text>
+          ) : null}
+
+          <PrimaryButton
+            label={isSubmitting ? 'Đang xác thực...' : 'Xác thực'}
+            onPress={handleVerify}
+            style={styles.primaryAction}
+          />
+
+          {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+
+          {resendMessage ? <Text style={styles.successText}>{resendMessage}</Text> : null}
+
+          <Text style={styles.resendText} onPress={handleResendOtp}>
+            {isResending ? 'Đang gửi lại OTP...' : 'Chưa nhận được mã? Gửi lại OTP'}
+          </Text>
+
+          <Text style={styles.backText} onPress={() => navigation.navigate('SignUp')}>
+            Sai email? Quay lại đăng ký
+          </Text>
         </Card>
       </KeyboardAvoidingView>
     </Screen>
@@ -86,8 +156,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     ...theme.typography.bodyRegular
   },
+  devHint: {
+    ...theme.typography.small,
+    color: theme.colors.textMuted,
+    marginTop: theme.spacing.sm
+  },
   primaryAction: {
     marginTop: theme.spacing.lg
+  },
+  errorText: {
+    ...theme.typography.small,
+    color: theme.colors.danger,
+    marginTop: theme.spacing.sm
+  },
+  successText: {
+    ...theme.typography.small,
+    color: theme.colors.success,
+    marginTop: theme.spacing.sm
+  },
+  resendText: {
+    ...theme.typography.caption,
+    color: theme.colors.primary,
+    marginTop: theme.spacing.md,
+    textAlign: 'center',
+    fontWeight: '700'
+  },
+  backText: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    marginTop: theme.spacing.sm,
+    textAlign: 'center'
   }
 });
 

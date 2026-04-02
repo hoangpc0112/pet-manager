@@ -6,12 +6,17 @@ import Card from '../components/Card';
 import GhostButton from '../components/GhostButton';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import { useAuth } from '../context/AuthContext';
 
 const ProfileScreen = ({ onLogout }) => {
   const { profileOverview, profileSettings, profileStats } = useAppData();
+  const { user } = useAuth();
   const overview = profileOverview || {};
   const settings = profileSettings || [];
   const stats = profileStats || [];
+  const profileName = user?.displayName || overview.name || 'Người dùng';
+  const profileEmail = user?.email || overview.email || 'Chưa cập nhật email';
+  const profilePhone = user?.phoneNumber || overview.phone || 'Chưa cập nhật số điện thoại';
 
   return (
     <Screen contentContainerStyle={styles.container}>
@@ -24,9 +29,9 @@ const ProfileScreen = ({ onLogout }) => {
           <Ionicons name="person" size={26} color={theme.colors.primary} />
         </View>
         <View style={styles.profileInfo}>
-          <Text style={styles.name}>{overview.name}</Text>
-          <Text style={styles.meta}>{overview.email}</Text>
-          <Text style={styles.meta}>{overview.phone}</Text>
+          <Text style={styles.name}>{profileName}</Text>
+          <Text style={styles.meta}>{profileEmail}</Text>
+          <Text style={styles.meta}>{profilePhone}</Text>
         </View>
         <View style={styles.planBadge}>
           <Text style={styles.planText}>{overview.plan}</Text>

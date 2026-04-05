@@ -7,6 +7,7 @@ import Card from '../components/Card';
 import PaginationControls from '../components/PaginationControls';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import { normalizeForSubmit, sanitizeMultilineInput, sanitizeSingleLineInput } from '../services/inputSanitizers';
 
 const PAGE_SIZE = 5;
 
@@ -178,17 +179,23 @@ const PetVaccinesScreen = ({ navigation, route }) => {
       Alert.alert('Thiếu dữ liệu', 'Chưa chọn được thú cưng để thao tác.');
       return;
     }
-    if (!name.trim()) {
+    const cleanName = normalizeForSubmit(name);
+    const cleanDoneDate = normalizeForSubmit(doneDate);
+    const cleanNextDate = normalizeForSubmit(nextDate);
+    const cleanClinic = normalizeForSubmit(clinic);
+    const cleanNote = normalizeForSubmit(note);
+
+    if (!cleanName) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên mũi tiêm.');
       return;
     }
 
     const payload = {
-      name: name.trim(),
-      doneDate: doneDate.trim(),
-      nextDate: nextDate.trim(),
-      clinic: clinic.trim(),
-      note: note.trim()
+      name: cleanName,
+      doneDate: cleanDoneDate,
+      nextDate: cleanNextDate,
+      clinic: cleanClinic,
+      note: cleanNote
     };
 
     if (editingId) {
@@ -224,9 +231,12 @@ const PetVaccinesScreen = ({ navigation, route }) => {
           <Text style={styles.formTitle}>{editingId ? 'Sửa mũi tiêm' : 'Thêm mũi tiêm mới'}</Text>
           <TextInput
             value={name}
-            onChangeText={setName}
+            onChangeText={(value) =>
+              setName(sanitizeSingleLineInput(value, { maxLength: 120, collapseWhitespace: true }))
+            }
             placeholder="Tên mũi tiêm"
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.input}
           />
 
@@ -255,18 +265,22 @@ const PetVaccinesScreen = ({ navigation, route }) => {
 
           <TextInput
             value={clinic}
-            onChangeText={setClinic}
+            onChangeText={(value) =>
+              setClinic(sanitizeSingleLineInput(value, { maxLength: 120, collapseWhitespace: true }))
+            }
             placeholder="Phòng khám"
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.input}
           />
           <TextInput
             value={note}
-            onChangeText={setNote}
+            onChangeText={(value) => setNote(sanitizeMultilineInput(value, { maxLength: 1000 }))}
             placeholder="Ghi chú"
             placeholderTextColor={theme.colors.textLight}
             style={[styles.input, styles.textArea]}
             multiline
+            autoCorrect={false}
           />
 
           <View style={styles.formActions}>

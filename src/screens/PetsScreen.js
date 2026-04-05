@@ -6,12 +6,13 @@ import Card from '../components/Card';
 import PaginationControls from '../components/PaginationControls';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import { sanitizeSingleLineInput } from '../services/inputSanitizers';
 import { getCollectionPage } from '../services/firestore';
 
 const PAGE_SIZE = 5;
 
 const PetsScreen = ({ navigation }) => {
-  const { pets } = useAppData();
+  const { pets, petsCollectionName, isLoadingData } = useAppData();
   const scrollRef = useRef(null);
   const [keyword, setKeyword] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -40,6 +41,8 @@ const PetsScreen = ({ navigation }) => {
     }
     return serverPagePets;
   }, [isSearching, filteredPets, currentPage, serverPagePets]);
+  const isListEmpty = !isLoadingData && !isPageLoading && visiblePets.length === 0;
+  const hasListData = isSearching ? filteredPets.length > 0 : pets.length > 0;
 
   useEffect(() => {
     setCurrentPage((prev) => Math.min(prev, totalPages));
@@ -66,7 +69,7 @@ const PetsScreen = ({ navigation }) => {
         }
 
         const result = await getCollectionPage({
-          collectionName: 'pets',
+          collectionName: petsCollectionName,
           pageSize: PAGE_SIZE,
           cursor: pageStartCursorRef.current[page],
           orderByField: 'createdAt',
@@ -78,7 +81,7 @@ const PetsScreen = ({ navigation }) => {
       }
 
       const result = await getCollectionPage({
-        collectionName: 'pets',
+        collectionName: petsCollectionName,
         pageSize: PAGE_SIZE,
         cursor: pageStartCursorRef.current[targetPage],
         orderByField: 'createdAt',
@@ -101,9 +104,13 @@ const PetsScreen = ({ navigation }) => {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
 
     if (!isSearching) {
+      if (!petsCollectionName) {
+        setServerPagePets([]);
+        return;
+      }
       loadPage(currentPage);
     }
-  }, [currentPage, isSearching, pets.length]);
+  }, [currentPage, isSearching, pets.length, petsCollectionName]);
 
   return (
     <Screen contentContainerStyle={styles.container} scrollViewRef={scrollRef}>
@@ -119,9 +126,12 @@ const PetsScreen = ({ navigation }) => {
         <Ionicons name="search" size={18} color={theme.colors.textLight} />
         <TextInput
           value={keyword}
-          onChangeText={setKeyword}
+          onChangeText={(value) =>
+            setKeyword(sanitizeSingleLineInput(value, { maxLength: 100, collapseWhitespace: true }))
+          }
           placeholder="Tìm theo tên hoặc giống loài"
           placeholderTextColor={theme.colors.textLight}
+          autoCorrect={false}
           style={styles.searchInput}
         />
       </View>
@@ -144,8 +154,25 @@ const PetsScreen = ({ navigation }) => {
         </TouchableOpacity>
       ))}
 
+      {isListEmpty ? (
+        <Card style={styles.emptyCard}>
+          <Ionicons name={isSearching ? 'search-outline' : 'paw-outline'} size={26} color={theme.colors.primary} />
+          <Text style={styles.emptyTitle}>{isSearching ? 'Không tìm thấy thú cưng phù hợp' : 'Bạn chưa thêm thú cưng nào'}</Text>
+          <Text style={styles.emptyText}>
+            {isSearching
+              ? 'Thử đổi từ khóa tìm kiếm để xem kết quả khác.'
+              : 'Thêm hồ sơ thú cưng đầu tiên để bắt đầu theo dõi sức khỏe.'}
+          </Text>
+          {!isSearching ? (
+            <TouchableOpacity style={styles.emptyAction} onPress={() => navigation.navigate('PetNew')}>
+              <Text style={styles.emptyActionText}>Thêm thú cưng</Text>
+            </TouchableOpacity>
+          ) : null}
+        </Card>
+      ) : null}
+
       {isPageLoading ? <Text style={styles.loadingText}>Đang tải danh sách...</Text> : null}
-      <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+      {hasListData ? <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} /> : null}
     </Screen>
   );
 };
@@ -198,6 +225,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: theme.spacing.md
+  },
+  emptyCard: {
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+    paddingVertical: 22,
+    paddingHorizontal: 18
+  },
+  emptyTitle: {
+    ...theme.typography.body,
+    fontWeight: '700',
+    marginTop: theme.spacing.sm,
+    textAlign: 'center'
+  },
+  emptyText: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    marginTop: 6,
+    textAlign: 'center'
+  },
+  emptyAction: {
+    marginTop: theme.spacing.md,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14
+  },
+  emptyActionText: {
+    ...theme.typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700'
   },
   petImage: {
     width: 72,

@@ -7,10 +7,41 @@ import {
   subscribeCollectionDocs,
   subscribeDocument
 } from '../services/firestore';
+import {
+  cancelReminderNotifications,
+  scheduleReminderNotifications
+} from '../services/reminderNotifications';
+import {
+  symptomGroups as defaultSymptomGroups,
+  symptomMeta as defaultSymptomMeta,
+  symptomOptions as defaultSymptomOptions
+} from '../data/symptoms';
+import { useAuth } from './AuthContext';
 
 const AppDataContext = createContext(null);
 
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+const ensureSymptomFallbacks = (config) => {
+  const nextConfig = { ...(config || {}) };
+
+  nextConfig.symptomGroups = Array.isArray(nextConfig.symptomGroups) && nextConfig.symptomGroups.length > 0
+    ? nextConfig.symptomGroups
+    : defaultSymptomGroups;
+
+  nextConfig.symptomOptions = Array.isArray(nextConfig.symptomOptions) && nextConfig.symptomOptions.length > 0
+    ? nextConfig.symptomOptions
+    : defaultSymptomOptions;
+
+  const meta = nextConfig.symptomMeta || {};
+  nextConfig.symptomMeta = {
+    duration: Array.isArray(meta.duration) && meta.duration.length > 0 ? meta.duration : defaultSymptomMeta.duration,
+    energy: Array.isArray(meta.energy) && meta.energy.length > 0 ? meta.energy : defaultSymptomMeta.energy,
+    appetite: Array.isArray(meta.appetite) && meta.appetite.length > 0 ? meta.appetite : defaultSymptomMeta.appetite
+  };
+
+  return nextConfig;
+};
 
 const DEFAULT_APP_CONFIG = {
   communityTabs: ['Hỏi đáp', 'review', 'Mạng xã hội'],
@@ -45,13 +76,9 @@ const DEFAULT_APP_CONFIG = {
   reminderItems: [],
   shopTabs: ['Tất cả'],
   shopItems: [],
-  symptomGroups: [],
-  symptomOptions: [],
-  symptomMeta: {
-    duration: ['< 24h', '1-3 ngày', '> 3 ngày'],
-    energy: ['Thấp', 'Bình thường', 'Cao'],
-    appetite: ['Giảm', 'Bình thường', 'Tăng']
-  },
+  symptomGroups: defaultSymptomGroups,
+  symptomOptions: defaultSymptomOptions,
+  symptomMeta: defaultSymptomMeta,
   resultSteps: [],
   resultWarnings: []
 };
@@ -119,24 +146,49 @@ const normalizeCommunityPost = (post) => {
 };
 
 export const AppDataProvider = ({ children }) => {
+  const { user, isAuthLoading } = useAuth();
+  const currentUserId = user?.uid || '';
+
   const [pets, setPets] = useState([]);
   const [journalEntries, setJournalEntries] = useState([]);
   const [communityPosts, setCommunityPosts] = useState([]);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
+  const appConfigCollectionPath = useMemo(
+    () => (currentUserId ? `users/${currentUserId}/app_config` : ''),
+    [currentUserId]
+  );
+  const petsCollectionPath = useMemo(
+    () => (currentUserId ? `users/${currentUserId}/pets` : ''),
+    [currentUserId]
+  );
+  const journalCollectionPath = useMemo(
+    () => (currentUserId ? `users/${currentUserId}/journalEntries` : ''),
+    [currentUserId]
+  );
+
   const loadAppData = useCallback(async () => {
+    if (!currentUserId) {
+      setAppConfig(DEFAULT_APP_CONFIG);
+      setPets([]);
+      setJournalEntries([]);
+      setCommunityPosts([]);
+      setIsLoadingData(false);
+      return;
+    }
+
     setIsLoadingData(true);
     try {
       const [configDoc, petDocs, journalDocs, communityDocs] = await Promise.all([
-        getDocument('app_config', 'main'),
-        getCollectionDocs('pets'),
-        getCollectionDocs('journalEntries'),
+        getDocument(appConfigCollectionPath, 'main'),
+        getCollectionDocs(petsCollectionPath),
+        getCollectionDocs(journalCollectionPath),
         getCollectionDocs('communityPosts')
       ]);
 
       if (configDoc) {
-        setAppConfig((prev) => ({ ...prev, ...configDoc }));
+        setAppConfig((prev) => ensureSymptomFallbacks({ ...prev, ...configDoc }));
       }
       setPets(sortByCreatedAtDesc(petDocs));
       setJournalEntries(sortByCreatedAtDesc(journalDocs));
@@ -147,9 +199,14 @@ export const AppDataProvider = ({ children }) => {
     } finally {
       setIsLoadingData(false);
     }
-  }, []);
+  }, [appConfigCollectionPath, currentUserId, journalCollectionPath, petsCollectionPath]);
 
   useEffect(() => {
+    if (isAuthLoading) {
+      setIsLoadingData(true);
+      return () => {};
+    }
+
     setIsLoadingData(true);
 
     const loaded = {
@@ -166,12 +223,21 @@ export const AppDataProvider = ({ children }) => {
       }
     };
 
+    if (!currentUserId) {
+      setAppConfig(DEFAULT_APP_CONFIG);
+      setPets([]);
+      setJournalEntries([]);
+      setCommunityPosts([]);
+      setIsLoadingData(false);
+      return () => {};
+    }
+
     const unsubConfig = subscribeDocument(
-      'app_config',
+      appConfigCollectionPath,
       'main',
       (configDoc) => {
         if (configDoc) {
-          setAppConfig((prev) => ({ ...prev, ...configDoc }));
+          setAppConfig((prev) => ensureSymptomFallbacks({ ...prev, ...configDoc }));
         }
         markLoaded('config');
       },
@@ -183,7 +249,7 @@ export const AppDataProvider = ({ children }) => {
     );
 
     const unsubPets = subscribeCollectionDocs(
-      'pets',
+      petsCollectionPath,
       (petDocs) => {
         setPets(sortByCreatedAtDesc(petDocs));
         markLoaded('pets');
@@ -196,7 +262,7 @@ export const AppDataProvider = ({ children }) => {
     );
 
     const unsubJournal = subscribeCollectionDocs(
-      'journalEntries',
+      journalCollectionPath,
       (journalDocs) => {
         setJournalEntries(sortByCreatedAtDesc(journalDocs));
         markLoaded('journalEntries');
@@ -227,9 +293,11 @@ export const AppDataProvider = ({ children }) => {
       unsubJournal();
       unsubCommunity();
     };
-  }, []);
+  }, [appConfigCollectionPath, currentUserId, isAuthLoading, journalCollectionPath, petsCollectionPath]);
 
   const saveJournalEntry = (entry) => {
+    if (!currentUserId) return null;
+
     const nextEntry = {
       id: makeId('log'),
       title: entry.title,
@@ -241,10 +309,11 @@ export const AppDataProvider = ({ children }) => {
       aiAnalysis: entry.aiAnalysis || null,
       aiRawResponse: entry.aiRawResponse || null,
       symptomSnapshot: entry.symptomSnapshot || null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      ownerId: currentUserId
     };
     setJournalEntries((prev) => [nextEntry, ...prev]);
-    setDocument('journalEntries', nextEntry.id, nextEntry).catch((error) => {
+    setDocument(journalCollectionPath, nextEntry.id, nextEntry).catch((error) => {
       // eslint-disable-next-line no-console
       console.error('Failed to save journal entry:', error);
     });
@@ -252,10 +321,10 @@ export const AppDataProvider = ({ children }) => {
   };
 
   const deleteJournalEntry = (entryId) => {
-    if (!entryId) return false;
+    if (!entryId || !currentUserId) return false;
 
     setJournalEntries((prev) => prev.filter((entry) => entry.id !== entryId));
-    deleteDocument('journalEntries', entryId).catch((error) => {
+    deleteDocument(journalCollectionPath, entryId).catch((error) => {
       // eslint-disable-next-line no-console
       console.error('Failed to delete journal entry:', error);
     });
@@ -264,6 +333,8 @@ export const AppDataProvider = ({ children }) => {
   };
 
   const addPet = (petInput) => {
+    if (!currentUserId) return null;
+
     const nextPet = {
       id: makeId('pet'),
       name: petInput.name,
@@ -275,10 +346,11 @@ export const AppDataProvider = ({ children }) => {
       imageUrl:
         petInput.imageUrl ||
         'https://images.unsplash.com/photo-1450778869180-41d0601e046e?q=80&w=400&auto=format&fit=crop',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      ownerId: currentUserId
     };
     setPets((prev) => [nextPet, ...prev]);
-    setDocument('pets', nextPet.id, nextPet).catch((error) => {
+    setDocument(petsCollectionPath, nextPet.id, nextPet).catch((error) => {
       // eslint-disable-next-line no-console
       console.error('Failed to save pet:', error);
     });
@@ -286,6 +358,8 @@ export const AppDataProvider = ({ children }) => {
   };
 
   const updatePet = (petId, petInput) => {
+    if (!currentUserId) return null;
+
     const currentPet = pets.find((pet) => pet.id === petId);
     if (!currentPet) return null;
 
@@ -296,7 +370,7 @@ export const AppDataProvider = ({ children }) => {
     };
 
     setPets((prev) => prev.map((pet) => (pet.id === petId ? nextPet : pet)));
-    setDocument('pets', petId, nextPet).catch((error) => {
+    setDocument(petsCollectionPath, petId, nextPet).catch((error) => {
       // eslint-disable-next-line no-console
       console.error('Failed to update pet:', error);
     });
@@ -309,7 +383,7 @@ export const AppDataProvider = ({ children }) => {
       journalEntries
         .filter((entry) => entry.pet === currentPet.name)
         .forEach((entry) => {
-          setDocument('journalEntries', entry.id, { pet: nextPet.name }).catch((error) => {
+          setDocument(journalCollectionPath, entry.id, { pet: nextPet.name }).catch((error) => {
             // eslint-disable-next-line no-console
             console.error('Failed to update journal pet name:', error);
           });
@@ -320,6 +394,8 @@ export const AppDataProvider = ({ children }) => {
   };
 
   const updateProfileOverview = (profileInput) => {
+    if (!currentUserId) return null;
+
     const nextOverview = {
       ...(appConfig.profileOverview || DEFAULT_APP_CONFIG.profileOverview),
       ...profileInput
@@ -330,7 +406,7 @@ export const AppDataProvider = ({ children }) => {
       profileOverview: nextOverview
     }));
 
-    setDocument('app_config', 'main', { profileOverview: nextOverview }).catch((error) => {
+    setDocument(appConfigCollectionPath, 'main', { profileOverview: nextOverview }).catch((error) => {
       // eslint-disable-next-line no-console
       console.error('Failed to update profile overview:', error);
     });
@@ -339,6 +415,8 @@ export const AppDataProvider = ({ children }) => {
   };
 
   const addPetVaccination = (petId, vaccineInput) => {
+    if (!currentUserId) return null;
+
     const currentPet = pets.find((pet) => pet.id === petId);
     if (!currentPet) return null;
 
@@ -372,7 +450,7 @@ export const AppDataProvider = ({ children }) => {
       )
     );
 
-    setDocument('pets', petId, {
+    setDocument(petsCollectionPath, petId, {
       vaccinations: nextVaccinations,
       updatedAt: Date.now()
     }).catch((error) => {
@@ -384,6 +462,8 @@ export const AppDataProvider = ({ children }) => {
   };
 
   const updatePetVaccination = (petId, vaccinationId, vaccineInput) => {
+    if (!currentUserId) return null;
+
     const currentPet = pets.find((pet) => pet.id === petId);
     if (!currentPet || !vaccinationId) return null;
 
@@ -420,7 +500,7 @@ export const AppDataProvider = ({ children }) => {
       )
     );
 
-    setDocument('pets', petId, {
+    setDocument(petsCollectionPath, petId, {
       vaccinations: nextVaccinations,
       updatedAt: Date.now()
     }).catch((error) => {
@@ -432,6 +512,8 @@ export const AppDataProvider = ({ children }) => {
   };
 
   const deletePetVaccination = (petId, vaccinationId) => {
+    if (!currentUserId) return false;
+
     const currentPet = pets.find((pet) => pet.id === petId);
     if (!currentPet || !vaccinationId) return false;
 
@@ -451,7 +533,7 @@ export const AppDataProvider = ({ children }) => {
       )
     );
 
-    setDocument('pets', petId, {
+    setDocument(petsCollectionPath, petId, {
       vaccinations: nextVaccinations,
       updatedAt: Date.now()
     }).catch((error) => {
@@ -462,13 +544,23 @@ export const AppDataProvider = ({ children }) => {
     return true;
   };
 
-  const createReminder = (reminderInput) => {
+  const createReminder = async (reminderInput) => {
+    if (!currentUserId) {
+      return {
+        reminder: null,
+        notificationScheduled: false
+      };
+    }
+
     const nextReminder = {
       id: makeId('rem'),
       title: reminderInput.title,
       time: reminderInput.time,
-      repeat: reminderInput.repeat || 'Mỗi ngày',
+      repeat: reminderInput.repeat || 'Thứ 2, Thứ 3, Thứ 4, Thứ 5, Thứ 6',
       pet: reminderInput.pet || 'Tất cả',
+      petId: reminderInput.petId || null,
+      notificationIds: [],
+      calendarEventId: '',
       enabled: true,
       createdAt: Date.now()
     };
@@ -490,27 +582,107 @@ export const AppDataProvider = ({ children }) => {
       };
     });
 
-    setDocument('app_config', 'main', {
-      reminderItems: nextItems,
-      reminderSummary: nextSummary,
-      updatedAt: Date.now()
-    }).catch((error) => {
+    try {
+      await setDocument(appConfigCollectionPath, 'main', {
+        reminderItems: nextItems,
+        reminderSummary: nextSummary,
+        updatedAt: Date.now()
+      });
+    } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to create reminder:', error);
-    });
 
-    return nextReminder;
+      setAppConfig((prev) => {
+        const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+        const rolledBackItems = currentItems.filter((item) => item.id !== nextReminder.id);
+        const rolledBackSummary = {
+          ...(prev.reminderSummary || DEFAULT_APP_CONFIG.reminderSummary),
+          count: rolledBackItems.length
+        };
+
+        return {
+          ...prev,
+          reminderItems: rolledBackItems,
+          reminderSummary: rolledBackSummary
+        };
+      });
+
+      return {
+        reminder: null,
+        notificationScheduled: false
+      };
+    }
+
+    let notificationScheduled = false;
+
+    try {
+      const notificationIds = await scheduleReminderNotifications(nextReminder);
+      notificationScheduled = Array.isArray(notificationIds) && notificationIds.length > 0;
+
+      const safeNotificationIds = Array.isArray(notificationIds) ? notificationIds : [];
+
+      let syncedItems = [];
+      setAppConfig((prev) => {
+        const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+        const updatedReminder = {
+          ...nextReminder,
+          notificationIds: safeNotificationIds,
+          calendarEventId: '',
+          updatedAt: Date.now()
+        };
+        const index = currentItems.findIndex((item) => item.id === nextReminder.id);
+
+        if (index >= 0) {
+          syncedItems = currentItems.map((item) =>
+            item.id === nextReminder.id
+              ? {
+                  ...item,
+                  ...updatedReminder
+                }
+              : item
+          );
+        } else {
+          syncedItems = sortByCreatedAtDesc([updatedReminder, ...currentItems]);
+        }
+
+        return {
+          ...prev,
+          reminderItems: syncedItems
+        };
+      });
+
+      setDocument(appConfigCollectionPath, 'main', {
+        reminderItems: syncedItems,
+        updatedAt: Date.now()
+      }).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to sync reminder channels:', error);
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to sync reminder notifications/calendar:', error);
+    }
+
+    return {
+      reminder: nextReminder,
+      notificationScheduled
+    };
   };
 
   const toggleReminderEnabled = (reminderId) => {
-    if (!reminderId) return null;
+    if (!reminderId || !currentUserId) return null;
 
     let nextItems = [];
+    let nextReminder = null;
+    let previousReminder = null;
     setAppConfig((prev) => {
       const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
-      nextItems = currentItems.map((item) =>
-        item.id === reminderId ? { ...item, enabled: !item.enabled, updatedAt: Date.now() } : item
-      );
+      nextItems = currentItems.map((item) => {
+        if (item.id !== reminderId) return item;
+        previousReminder = item;
+        nextReminder = { ...item, enabled: !item.enabled, updatedAt: Date.now() };
+        return nextReminder;
+      });
 
       return {
         ...prev,
@@ -518,7 +690,7 @@ export const AppDataProvider = ({ children }) => {
       };
     });
 
-    setDocument('app_config', 'main', {
+    setDocument(appConfigCollectionPath, 'main', {
       reminderItems: nextItems,
       updatedAt: Date.now()
     }).catch((error) => {
@@ -526,18 +698,70 @@ export const AppDataProvider = ({ children }) => {
       console.error('Failed to toggle reminder:', error);
     });
 
-    return nextItems.find((item) => item.id === reminderId) || null;
+    if (!nextReminder) return null;
+
+    const previousNotificationIds = Array.isArray(previousReminder?.notificationIds)
+      ? previousReminder.notificationIds
+      : [];
+    const applyReminderChannels = ({ notificationIds }) => {
+      let syncedItems = [];
+      setAppConfig((prev) => {
+        const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+        syncedItems = currentItems.map((item) =>
+          item.id === reminderId
+            ? {
+                ...item,
+                notificationIds: Array.isArray(notificationIds) ? notificationIds : item.notificationIds || [],
+                calendarEventId: '',
+                updatedAt: Date.now()
+              }
+            : item
+        );
+
+        return {
+          ...prev,
+          reminderItems: syncedItems
+        };
+      });
+
+      setDocument(appConfigCollectionPath, 'main', {
+        reminderItems: syncedItems,
+        updatedAt: Date.now()
+      }).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to sync reminder after toggle:', error);
+      });
+    };
+
+    cancelReminderNotifications(previousNotificationIds)
+      .then(async () => {
+        if (!nextReminder.enabled) {
+          applyReminderChannels({ notificationIds: [] });
+          return;
+        }
+
+        const scheduledIds = await scheduleReminderNotifications(nextReminder);
+        applyReminderChannels({ notificationIds: scheduledIds });
+      })
+      .catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to sync reminder notifications when toggling:', error);
+      });
+
+    return nextReminder;
   };
 
   const updateReminder = (reminderId, reminderInput) => {
-    if (!reminderId) return null;
+    if (!reminderId || !currentUserId) return null;
 
     let nextItems = [];
     let nextReminder = null;
+    let previousNotificationIds = [];
     setAppConfig((prev) => {
       const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
       nextItems = currentItems.map((item) => {
         if (item.id !== reminderId) return item;
+        previousNotificationIds = Array.isArray(item.notificationIds) ? item.notificationIds : [];
         nextReminder = {
           ...item,
           ...reminderInput,
@@ -554,7 +778,7 @@ export const AppDataProvider = ({ children }) => {
 
     if (!nextReminder) return null;
 
-    setDocument('app_config', 'main', {
+    setDocument(appConfigCollectionPath, 'main', {
       reminderItems: nextItems,
       updatedAt: Date.now()
     }).catch((error) => {
@@ -562,17 +786,76 @@ export const AppDataProvider = ({ children }) => {
       console.error('Failed to update reminder:', error);
     });
 
+    cancelReminderNotifications(previousNotificationIds)
+      .then(async () => {
+        if (!nextReminder.enabled) {
+          let syncedItems = [];
+          setAppConfig((prev) => {
+            const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+            syncedItems = currentItems.map((item) =>
+              item.id === reminderId
+                ? { ...item, notificationIds: [], calendarEventId: '', updatedAt: Date.now() }
+                : item
+            );
+
+            return {
+              ...prev,
+              reminderItems: syncedItems
+            };
+          });
+
+          setDocument(appConfigCollectionPath, 'main', {
+            reminderItems: syncedItems,
+            updatedAt: Date.now()
+          }).catch((error) => {
+            // eslint-disable-next-line no-console
+            console.error('Failed to clear reminder notifications:', error);
+          });
+          return;
+        }
+
+        const scheduledIds = await scheduleReminderNotifications(nextReminder);
+        let syncedItems = [];
+        setAppConfig((prev) => {
+          const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+          syncedItems = currentItems.map((item) =>
+            item.id === reminderId
+              ? { ...item, notificationIds: scheduledIds, calendarEventId: '', updatedAt: Date.now() }
+              : item
+          );
+
+          return {
+            ...prev,
+            reminderItems: syncedItems
+          };
+        });
+
+        setDocument(appConfigCollectionPath, 'main', {
+          reminderItems: syncedItems,
+          updatedAt: Date.now()
+        }).catch((error) => {
+          // eslint-disable-next-line no-console
+          console.error('Failed to sync reminder notification ids on update:', error);
+        });
+      })
+      .catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to reschedule reminder notifications:', error);
+      });
+
     return nextReminder;
   };
 
   const deleteReminder = (reminderId) => {
-    if (!reminderId) return false;
+    if (!reminderId || !currentUserId) return false;
 
     let nextItems = [];
     let removed = false;
+    let deletedReminder = null;
     let nextSummary = DEFAULT_APP_CONFIG.reminderSummary;
     setAppConfig((prev) => {
       const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
+      deletedReminder = currentItems.find((item) => item.id === reminderId) || null;
       nextItems = currentItems.filter((item) => item.id !== reminderId);
       removed = nextItems.length !== currentItems.length;
       nextSummary = {
@@ -589,13 +872,18 @@ export const AppDataProvider = ({ children }) => {
 
     if (!removed) return false;
 
-    setDocument('app_config', 'main', {
+    setDocument(appConfigCollectionPath, 'main', {
       reminderItems: nextItems,
       reminderSummary: nextSummary,
       updatedAt: Date.now()
     }).catch((error) => {
       // eslint-disable-next-line no-console
       console.error('Failed to delete reminder:', error);
+    });
+
+    cancelReminderNotifications(deletedReminder?.notificationIds).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to cancel reminder notifications on delete:', error);
     });
 
     return true;
@@ -723,6 +1011,8 @@ export const AppDataProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       ...appConfig,
+      petsCollectionName: petsCollectionPath,
+      journalCollectionName: journalCollectionPath,
       pets,
       journalEntries,
       communityPosts,
@@ -745,7 +1035,16 @@ export const AppDataProvider = ({ children }) => {
       toggleCommunityPostLike,
       addCommunityPostComment
     }),
-    [appConfig, pets, journalEntries, communityPosts, isLoadingData, loadAppData]
+    [
+      appConfig,
+      petsCollectionPath,
+      journalCollectionPath,
+      pets,
+      journalEntries,
+      communityPosts,
+      isLoadingData,
+      loadAppData
+    ]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

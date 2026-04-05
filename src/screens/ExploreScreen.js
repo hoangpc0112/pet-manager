@@ -7,14 +7,38 @@ import IconBadge from '../components/IconBadge';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
 
+const DEFAULT_EXPLORE_CARDS = [
+  {
+    id: 'community',
+    icon: 'chatbubbles-outline',
+    title: 'Cộng đồng thú cưng',
+    subtitle: 'Đặt câu hỏi, chia sẻ kinh nghiệm và kết nối với người nuôi khác.'
+  },
+  {
+    id: 'shop',
+    icon: 'cart-outline',
+    title: 'Cửa hàng',
+    subtitle: 'Khám phá thức ăn, phụ kiện và sản phẩm chăm sóc phù hợp.'
+  },
+  {
+    id: 'nearby',
+    icon: 'location-outline',
+    title: 'Dịch vụ gần bạn',
+    subtitle: 'Tìm phòng khám, spa và dịch vụ thú cưng xung quanh bạn.'
+  }
+];
+
 const ExploreScreen = ({ navigation }) => {
-  const { exploreCards, recommendations } = useAppData();
-  const cards = exploreCards || [];
-  const suggestionItems = recommendations || [];
+  const { exploreCards } = useAppData();
+  const cards = Array.isArray(exploreCards) && exploreCards.length > 0 ? exploreCards : DEFAULT_EXPLORE_CARDS;
 
   return (
     <Screen contentContainerStyle={styles.container}>
       <Text style={styles.header}>Khám phá</Text>
+
+      {!Array.isArray(exploreCards) || exploreCards.length === 0 ? (
+        <Text style={styles.fallbackHint}>Hiển thị danh mục mặc định vì chưa có dữ liệu khám phá.</Text>
+      ) : null}
 
       {cards.map((card) => (
         <TouchableOpacity
@@ -61,6 +85,11 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: theme.colors.textMuted,
     marginTop: 6
+  },
+  fallbackHint: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    marginBottom: theme.spacing.md
   },
   sectionLabel: {
     ...theme.typography.caption,

@@ -12,9 +12,18 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Ung dung can vi tri de hien thi dich vu thu cung gan ban.",
+        "NSUserNotificationUsageDescription": "Ung dung can gui thong bao de nhac lich cham soc thu cung.",
+        "NSCalendarsUsageDescription": "Ung dung can quyen lich de tao su kien nhac nho cham soc thu cung."
+      }
     },
     "android": {
+      "permissions": [
+        "READ_CALENDAR",
+        "WRITE_CALENDAR"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,6 +33,27 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Ung dung can vi tri de hien thi dich vu thu cung gan ban."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB"
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Ung dung can quyen lich de tao su kien nhac nho cham soc thu cung."
+        }
+      ]
+    ]
   }
 }

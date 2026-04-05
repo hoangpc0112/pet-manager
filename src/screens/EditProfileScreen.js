@@ -7,6 +7,7 @@ import Card from '../components/Card';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
 import { useAuth } from '../context/AuthContext';
+import { normalizeForSubmit, sanitizePhoneInput, sanitizeSingleLineInput } from '../services/inputSanitizers';
 import { getAuthErrorMessage } from '../services/auth';
 
 const isRemoteUrl = (value) => /^https?:\/\//i.test(String(value || '').trim());
@@ -30,7 +31,7 @@ const EditProfileScreen = ({ navigation }) => {
   const handlePickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Can quyen truy cap', 'Vui long cap quyen thu vien anh de chon anh dai dien.');
+      Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để chọn ảnh đại diện.');
       return;
     }
 
@@ -59,9 +60,10 @@ const EditProfileScreen = ({ navigation }) => {
   };
 
   const handleSave = async () => {
-    const nextName = name.trim();
+    const nextName = normalizeForSubmit(name);
+    const nextPhone = normalizeForSubmit(phone);
     if (!nextName) {
-      Alert.alert('Thieu thong tin', 'Vui long nhap ten hien thi.');
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên hiển thị.');
       return;
     }
 
@@ -82,14 +84,14 @@ const EditProfileScreen = ({ navigation }) => {
       updateProfileOverview({
         name: nextName,
         email: profileEmail,
-        phone: phone.trim(),
+        phone: nextPhone,
         avatarUrl: nextAvatarUrl
       });
 
-      Alert.alert('Thanh cong', 'Da cap nhat thong tin ho so.');
+      Alert.alert('Thành công', 'Đã cập nhật thông tin hồ sơ.');
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Khong the cap nhat', getAuthErrorMessage(error));
+      Alert.alert('Không thể cập nhật', getAuthErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -101,9 +103,9 @@ const EditProfileScreen = ({ navigation }) => {
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Sua ho so</Text>
+        <Text style={styles.headerTitle}>Sửa hồ sơ</Text>
         <TouchableOpacity onPress={handleSave} disabled={isSubmitting}>
-          <Text style={styles.save}>{isSubmitting ? 'Dang luu...' : 'Luu'}</Text>
+          <Text style={styles.save}>{isSubmitting ? 'Đang lưu...' : 'Lưu'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -114,7 +116,7 @@ const EditProfileScreen = ({ navigation }) => {
           ) : (
             <>
               <Ionicons name="person-circle" size={46} color={theme.colors.textLight} />
-              <Text style={styles.avatarHint}>Them anh dai dien</Text>
+              <Text style={styles.avatarHint}>Thêm ảnh đại diện</Text>
             </>
           )}
         </TouchableOpacity>
@@ -122,17 +124,20 @@ const EditProfileScreen = ({ navigation }) => {
         {avatarPreview ? (
           <TouchableOpacity style={styles.removeRow} onPress={handleRemoveAvatar}>
             <Ionicons name="close-circle" size={18} color={theme.colors.danger} />
-            <Text style={styles.removeText}>Xoa anh</Text>
+            <Text style={styles.removeText}>Xóa ảnh</Text>
           </TouchableOpacity>
         ) : null}
 
         <View style={styles.fieldBlock}>
-          <Text style={styles.fieldLabel}>Ten hien thi</Text>
+          <Text style={styles.fieldLabel}>Tên hiển thị</Text>
           <TextInput
             value={name}
-            onChangeText={setName}
-            placeholder="Nhap ten hien thi"
+            onChangeText={(value) =>
+              setName(sanitizeSingleLineInput(value, { maxLength: 60, collapseWhitespace: true }))
+            }
+            placeholder="Nhập tên hiển thị"
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </View>
@@ -143,13 +148,14 @@ const EditProfileScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.fieldBlock}>
-          <Text style={styles.fieldLabel}>So dien thoai</Text>
+          <Text style={styles.fieldLabel}>Số điện thoại</Text>
           <TextInput
             value={phone}
-            onChangeText={setPhone}
-            placeholder="Nhap so dien thoai"
+            onChangeText={(value) => setPhone(sanitizePhoneInput(value, 20))}
+            placeholder="Nhập số điện thoại"
             placeholderTextColor={theme.colors.textLight}
             keyboardType="phone-pad"
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </View>

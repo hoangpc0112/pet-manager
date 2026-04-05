@@ -4,6 +4,7 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
+import { normalizeForSubmit, sanitizeEmailInput } from '../services/inputSanitizers';
 import { getAuthErrorMessage } from '../services/auth';
 import theme from '../theme';
 
@@ -17,7 +18,9 @@ const SignInScreen = ({ navigation }) => {
   const handleSignIn = async () => {
     if (isSubmitting) return;
 
-    if (!email.trim() || !password) {
+    const cleanEmail = normalizeForSubmit(email);
+
+    if (!cleanEmail || !password) {
       setErrorText('Vui lòng nhập đầy đủ email và mật khẩu.');
       return;
     }
@@ -25,7 +28,7 @@ const SignInScreen = ({ navigation }) => {
     try {
       setIsSubmitting(true);
       setErrorText('');
-      await signIn({ email: email.trim(), password });
+      await signIn({ email: cleanEmail, password });
     } catch (error) {
       setErrorText(getAuthErrorMessage(error));
     } finally {
@@ -48,11 +51,12 @@ const SignInScreen = ({ navigation }) => {
           <Text style={styles.label}>Email</Text>
           <TextInput
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => setEmail(sanitizeEmailInput(value))}
             placeholder="email@domain.com"
             placeholderTextColor={theme.colors.textLight}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
             style={styles.input}
           />
 
@@ -63,6 +67,8 @@ const SignInScreen = ({ navigation }) => {
             placeholder="Nhập mật khẩu"
             placeholderTextColor={theme.colors.textLight}
             secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
             style={styles.input}
           />
 

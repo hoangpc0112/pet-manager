@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
@@ -9,6 +9,7 @@ import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import { normalizeForSubmit, sanitizeSingleLineInput } from '../services/inputSanitizers';
 
 const PAGE_SIZE = 5;
 
@@ -18,6 +19,7 @@ const SymptomStep1Screen = ({ navigation, route }) => {
   const preselectedPetId = route?.params?.preselectedPetId || '';
   const [selectedPetId, setSelectedPetId] = useState(preselectedPetId || pets[0]?.id || '');
   const [selectedGroupId, setSelectedGroupId] = useState(groups[0]?.id || '');
+  const [customGroupLabel, setCustomGroupLabel] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const petImageSources = useMemo(
     () =>
@@ -64,6 +66,12 @@ const SymptomStep1Screen = ({ navigation, route }) => {
   useEffect(() => {
     setCurrentPage((prev) => Math.min(prev, totalPages));
   }, [pets.length, totalPages]);
+
+  const isOtherGroup = selectedGroupId === 'other';
+  const canContinueToStep2 = Boolean(selectedGroupId) && (!isOtherGroup || Boolean(normalizeForSubmit(customGroupLabel)));
+  const selectedGroupLabel = isOtherGroup
+    ? normalizeForSubmit(customGroupLabel) || 'Khác'
+    : groups.find((item) => item.id === selectedGroupId)?.label || '';
 
   return (
     <Screen contentContainerStyle={styles.container}>
@@ -121,6 +129,22 @@ const SymptomStep1Screen = ({ navigation, route }) => {
             />
           ))}
         </View>
+
+        {isOtherGroup ? (
+          <View style={styles.customGroupWrap}>
+            <Text style={styles.customGroupLabel}>Nhập nhóm triệu chứng</Text>
+            <TextInput
+              value={customGroupLabel}
+              onChangeText={(value) =>
+                setCustomGroupLabel(sanitizeSingleLineInput(value, { maxLength: 80, collapseWhitespace: true }))
+              }
+              placeholder="Ví dụ: Thần kinh, Nội tiết..."
+              placeholderTextColor={theme.colors.textLight}
+              autoCorrect={false}
+              style={styles.customGroupInput}
+            />
+          </View>
+        ) : null}
       </Card>
 
       <PrimaryButton
@@ -130,9 +154,10 @@ const SymptomStep1Screen = ({ navigation, route }) => {
             selectedPetId,
             selectedPetName: selectedPet?.name || '',
             selectedGroupId,
-            selectedGroupLabel: groups.find((item) => item.id === selectedGroupId)?.label || ''
+            selectedGroupLabel
           })
         }
+        disabled={!canContinueToStep2}
         style={styles.primaryButton}
       />
     </Screen>
@@ -235,6 +260,23 @@ const styles = StyleSheet.create({
   chipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap'
+  },
+  customGroupWrap: {
+    marginTop: theme.spacing.sm
+  },
+  customGroupLabel: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    marginBottom: 8
+  },
+  customGroupInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    ...theme.typography.caption,
+    color: theme.colors.text
   },
   primaryButton: {
     marginTop: theme.spacing.xl

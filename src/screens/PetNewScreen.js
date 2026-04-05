@@ -6,6 +6,12 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import {
+  normalizeForSubmit,
+  sanitizeDateInput,
+  sanitizeDecimalInput,
+  sanitizeSingleLineInput
+} from '../services/inputSanitizers';
 
 const speciesOptions = [
   { label: 'Chó', value: 'dog' },
@@ -59,7 +65,12 @@ const PetNewScreen = ({ navigation }) => {
   };
 
   const handleSave = () => {
-    if (!name.trim() || !breed.trim()) {
+    const cleanName = normalizeForSubmit(name);
+    const cleanBreed = normalizeForSubmit(breed);
+    const cleanBirth = normalizeForSubmit(birth);
+    const cleanWeight = normalizeForSubmit(weight);
+
+    if (!cleanName || !cleanBreed) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên và giống thú cưng.');
       return;
     }
@@ -67,12 +78,12 @@ const PetNewScreen = ({ navigation }) => {
     setIsSubmitting(true);
 
     addPet({
-      name: name.trim(),
-      breed: breed.trim(),
+      name: cleanName,
+      breed: cleanBreed,
       species,
       gender,
-      age: birth.trim() ? `Sinh: ${birth.trim()}` : 'Chưa rõ tuổi',
-      weight: weight.trim() ? `${weight.trim()} kg` : 'Chưa rõ',
+      age: cleanBirth ? `Sinh: ${cleanBirth}` : 'Chưa rõ tuổi',
+      weight: cleanWeight ? `${cleanWeight} kg` : 'Chưa rõ',
       imageUrl: imageDataUri || undefined
     });
 
@@ -128,9 +139,12 @@ const PetNewScreen = ({ navigation }) => {
         <Field label="Tên thú cưng">
           <TextInput
             value={name}
-            onChangeText={setName}
+            onChangeText={(value) =>
+              setName(sanitizeSingleLineInput(value, { maxLength: 60, collapseWhitespace: true }))
+            }
             placeholder={formDefaults.namePlaceholder}
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>
@@ -154,9 +168,12 @@ const PetNewScreen = ({ navigation }) => {
         <Field label="Giống">
           <TextInput
             value={breed}
-            onChangeText={setBreed}
+            onChangeText={(value) =>
+              setBreed(sanitizeSingleLineInput(value, { maxLength: 80, collapseWhitespace: true }))
+            }
             placeholder={formDefaults.breedPlaceholder}
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>
@@ -178,9 +195,12 @@ const PetNewScreen = ({ navigation }) => {
         <Field label="Ngày sinh">
           <TextInput
             value={birth}
-            onChangeText={setBirth}
+            onChangeText={(value) => setBirth(sanitizeDateInput(value))}
             placeholder={formDefaults.birthPlaceholder}
             placeholderTextColor={theme.colors.textLight}
+            keyboardType="number-pad"
+            maxLength={10}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>
@@ -188,10 +208,11 @@ const PetNewScreen = ({ navigation }) => {
         <Field label="Cân nặng (kg)">
           <TextInput
             value={weight}
-            onChangeText={setWeight}
+            onChangeText={(value) => setWeight(sanitizeDecimalInput(value, { maxLength: 6 }))}
             placeholder={formDefaults.weightPlaceholder}
             placeholderTextColor={theme.colors.textLight}
             keyboardType="numeric"
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>

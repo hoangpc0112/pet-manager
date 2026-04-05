@@ -4,6 +4,7 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
+import { normalizeForSubmit, sanitizeEmailInput, sanitizeSingleLineInput } from '../services/inputSanitizers';
 import { getAuthErrorMessage } from '../services/auth';
 import theme from '../theme';
 
@@ -16,11 +17,9 @@ const SignUpScreen = ({ navigation }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { requestSignUpOtp } = useAuth();
 
-  const canSubmit =
-    displayName.trim().length > 0 &&
-    email.trim().length > 0 &&
-    password.length > 0 &&
-    password === confirmPassword;
+  const cleanDisplayName = normalizeForSubmit(displayName);
+  const cleanEmail = normalizeForSubmit(email);
+  const canSubmit = cleanDisplayName.length > 0 && cleanEmail.length > 0 && password.length > 0 && password === confirmPassword;
 
   const handleSignUp = async () => {
     if (isSubmitting) return;
@@ -33,8 +32,8 @@ const SignUpScreen = ({ navigation }) => {
       setIsSubmitting(true);
       setErrorText('');
       const payload = await requestSignUpOtp({
-        displayName: displayName.trim(),
-        email: email.trim(),
+        displayName: cleanDisplayName,
+        email: cleanEmail,
         password
       });
 
@@ -65,20 +64,24 @@ const SignUpScreen = ({ navigation }) => {
           <Text style={styles.label}>Tên hiển thị</Text>
           <TextInput
             value={displayName}
-            onChangeText={setDisplayName}
+            onChangeText={(value) =>
+              setDisplayName(sanitizeSingleLineInput(value, { maxLength: 60, collapseWhitespace: true }))
+            }
             placeholder="Tên của bạn"
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.input}
           />
 
           <Text style={[styles.label, styles.labelGap]}>Email</Text>
           <TextInput
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => setEmail(sanitizeEmailInput(value))}
             placeholder="email@domain.com"
             placeholderTextColor={theme.colors.textLight}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
             style={styles.input}
           />
 
@@ -89,6 +92,8 @@ const SignUpScreen = ({ navigation }) => {
             placeholder="Nhập mật khẩu"
             placeholderTextColor={theme.colors.textLight}
             secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
             style={styles.input}
           />
 
@@ -99,6 +104,8 @@ const SignUpScreen = ({ navigation }) => {
             placeholder="Nhập lại mật khẩu"
             placeholderTextColor={theme.colors.textLight}
             secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
             style={styles.input}
           />
 

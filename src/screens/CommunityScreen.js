@@ -8,6 +8,7 @@ import PaginationControls from '../components/PaginationControls';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
 import { useAuth } from '../context/AuthContext';
+import { normalizeForSubmit, sanitizeSingleLineInput } from '../services/inputSanitizers';
 
 const PAGE_SIZE = 5;
 
@@ -88,7 +89,7 @@ const CommunityScreen = ({ navigation }) => {
   };
 
   const handleSubmitComment = (postId) => {
-    const content = (commentDrafts[postId] || '').trim();
+    const content = normalizeForSubmit(commentDrafts[postId] || '');
     if (!content) return;
 
     addCommunityPostComment(postId, {
@@ -154,9 +155,12 @@ const CommunityScreen = ({ navigation }) => {
         <Ionicons name="search" size={18} color={theme.colors.textLight} />
         <TextInput
           value={keyword}
-          onChangeText={setKeyword}
+          onChangeText={(value) =>
+            setKeyword(sanitizeSingleLineInput(value, { maxLength: 100, collapseWhitespace: true }))
+          }
           placeholder="Lọc theo tiêu đề, nội dung"
           placeholderTextColor={theme.colors.textLight}
+          autoCorrect={false}
           style={styles.searchInput}
         />
       </View>
@@ -267,11 +271,12 @@ const CommunityScreen = ({ navigation }) => {
                   onChangeText={(value) =>
                     setCommentDrafts((prev) => ({
                       ...prev,
-                      [post.id]: value
+                      [post.id]: sanitizeSingleLineInput(value, { maxLength: 500, collapseWhitespace: true })
                     }))
                   }
                   placeholder="Viết bình luận..."
                   placeholderTextColor={theme.colors.textLight}
+                  autoCorrect={false}
                   style={styles.commentInput}
                 />
                 <TouchableOpacity style={styles.sendButton} onPress={() => handleSubmitComment(post.id)}>

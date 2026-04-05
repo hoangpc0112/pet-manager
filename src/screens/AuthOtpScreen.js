@@ -4,6 +4,7 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
+import { normalizeForSubmit, sanitizeOtpInput } from '../services/inputSanitizers';
 import { getAuthErrorMessage } from '../services/auth';
 import theme from '../theme';
 
@@ -25,7 +26,9 @@ const AuthOtpScreen = ({ route, navigation }) => {
       setErrorText('Không tìm thấy phiên OTP. Vui lòng yêu cầu mã mới.');
       return;
     }
-    if (otpCode.trim().length < 6) {
+    const cleanOtpCode = normalizeForSubmit(otpCode);
+
+    if (cleanOtpCode.length < 6) {
       setErrorText('Vui lòng nhập đủ 6 số OTP.');
       return;
     }
@@ -33,7 +36,7 @@ const AuthOtpScreen = ({ route, navigation }) => {
     try {
       setIsSubmitting(true);
       setErrorText('');
-      await verifySignUpOtp({ verificationId, otpCode: otpCode.trim() });
+      await verifySignUpOtp({ verificationId, otpCode: cleanOtpCode });
     } catch (error) {
       setErrorText(getAuthErrorMessage(error));
     } finally {
@@ -79,11 +82,12 @@ const AuthOtpScreen = ({ route, navigation }) => {
           <Text style={styles.label}>Mã OTP</Text>
           <TextInput
             value={otpCode}
-            onChangeText={setOtpCode}
+            onChangeText={(value) => setOtpCode(sanitizeOtpInput(value, 6))}
             placeholder="Nhập 6 số"
             placeholderTextColor={theme.colors.textLight}
             keyboardType="number-pad"
             maxLength={6}
+            autoCorrect={false}
             style={styles.input}
           />
 

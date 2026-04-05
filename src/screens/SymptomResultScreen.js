@@ -100,17 +100,12 @@ const SymptomResultScreen = ({ navigation, route }) => {
       <Card style={styles.card}>
         <Text style={styles.cardLabel}>Phản hồi từ AI</Text>
         {isAnalyzing ? <Text style={styles.loading}>Đang phân tích ...</Text> : null}
-        {analysisError ? <Text style={styles.errorText}>{analysisError}</Text> : null}
+        {analysisError ? <Text style={styles.errorText}>{analysisError}</Text> : null}    
         {analysisText ? <Text style={styles.rawText}>{analysisText}</Text> : null}
       </Card>
 
       <PrimaryButton label="Lưu vào nhật ký" onPress={handleSaveToJournal} style={styles.primaryButton} />
-      <GhostButton
-        label="Tạo nhắc nhở"
-        onPress={() => navigation.navigate('ReminderNew')}
-        style={styles.ghostButton}
-      />
-      <GhostButton label="Quay về danh sách thú cưng" onPress={() => navigation.navigate('Tabs', { screen: 'Pets' })} />
+      <GhostButton label="Quay về danh sách thú cưng" onPress={() => navigation.navigate('Tabs', { screen: 'Pets' })} style={styles.primaryButton} />
     </Screen>
   );
 };
@@ -164,10 +159,6 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     marginTop: theme.spacing.lg
-  },
-  ghostButton: {
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.lg
   },
   loading: {
     ...theme.typography.body,

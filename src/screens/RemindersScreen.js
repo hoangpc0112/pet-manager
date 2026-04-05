@@ -10,7 +10,7 @@ import { useAppData } from '../context/AppDataContext';
 const PAGE_SIZE = 5;
 const ALL_PETS_FILTER = 'ALL';
 
-const RemindersScreen = ({ navigation }) => {
+const RemindersScreen = ({ navigation, route }) => {
   const {
     reminderItems,
     reminderSummary,
@@ -53,10 +53,19 @@ const RemindersScreen = ({ navigation }) => {
   const summary = reminderSummary || { today: 'Hôm nay', count: 0 };
   const selectedPetFilterLabel =
     selectedPetFilter === ALL_PETS_FILTER ? 'Tất cả thú cưng' : selectedPetFilter;
+  const isEmpty = filteredItems.length === 0;
 
   useEffect(() => {
     setCurrentPage((prev) => Math.min(prev, totalPages));
   }, [filteredItems.length, totalPages]);
+
+  useEffect(() => {
+    if (!route?.params?.resetFilter) return;
+
+    setSelectedPetFilter(ALL_PETS_FILTER);
+    setCurrentPage(1);
+    navigation.setParams({ resetFilter: undefined });
+  }, [navigation, route?.params?.resetFilter]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -100,6 +109,12 @@ const RemindersScreen = ({ navigation }) => {
       </TouchableOpacity>
 
       <Text style={styles.sectionLabel}>LỊCH HÀNG NGÀY</Text>
+      {isEmpty ? (
+        <Card style={styles.emptyCard}>
+          <Text style={styles.emptyText}>Chưa có nhắc nhở nào được tạo.</Text>
+        </Card>
+      ) : null}
+
       {visibleItems.map((item) => (
         <Card key={item.id} style={styles.reminderCard}>
           <View style={styles.row}>
@@ -120,7 +135,7 @@ const RemindersScreen = ({ navigation }) => {
         </Card>
       ))}
 
-      <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+      {!isEmpty ? <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} /> : null}
 
       <Modal
         visible={showPetFilterModal}
@@ -274,6 +289,14 @@ const styles = StyleSheet.create({
   },
   reminderCard: {
     marginBottom: theme.spacing.md
+  },
+  emptyCard: {
+    marginBottom: theme.spacing.md,
+    alignItems: 'center'
+  },
+  emptyText: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted
   },
   row: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import { normalizeForSubmit, sanitizeMultilineInput, sanitizeSingleLineInput } from '../services/inputSanitizers';
 
 const categories = ['Sức khỏe', 'Dinh dưỡng', 'Vệ sinh', 'Vận động', 'Khác'];
 
@@ -80,16 +81,20 @@ const PetNewLogScreen = ({ navigation, route }) => {
   };
 
   const handleSave = () => {
-    if (!title.trim() || !note.trim() || !selectedPet) {
+    const cleanTitle = normalizeForSubmit(title);
+    const cleanNote = normalizeForSubmit(note);
+    const cleanDate = normalizeForSubmit(date);
+
+    if (!cleanTitle || !cleanNote || !selectedPet) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề, chọn thú cưng và ghi chú.');
       return;
     }
 
     saveJournalEntry({
-      title: title.trim(),
+      title: cleanTitle,
       pet: selectedPet.name,
-      date: date.trim() || new Date().toLocaleDateString('vi-VN'),
-      note: note.trim(),
+      date: cleanDate || new Date().toLocaleDateString('vi-VN'),
+      note: cleanNote,
       category
     });
 
@@ -121,9 +126,12 @@ const PetNewLogScreen = ({ navigation, route }) => {
         <Field label="Tiêu đề">
           <TextInput
             value={title}
-            onChangeText={setTitle}
+            onChangeText={(value) =>
+              setTitle(sanitizeSingleLineInput(value, { maxLength: 120, collapseWhitespace: true }))
+            }
             placeholder={formDefaults.titlePlaceholder}
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>
@@ -167,10 +175,11 @@ const PetNewLogScreen = ({ navigation, route }) => {
           <Text style={styles.fieldLabel}>Ghi chú <Text style={styles.required}>*</Text></Text>
           <TextInput
             value={note}
-            onChangeText={setNote}
+            onChangeText={(value) => setNote(sanitizeMultilineInput(value, { maxLength: 3000 }))}
             placeholder={formDefaults.notePlaceholder}
             placeholderTextColor={theme.colors.textLight}
             multiline
+            autoCorrect={false}
             style={[styles.fieldInput, styles.textArea]}
             textAlignVertical="top"
           />

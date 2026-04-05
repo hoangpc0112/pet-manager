@@ -6,6 +6,12 @@ import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import {
+  normalizeForSubmit,
+  sanitizeDateInput,
+  sanitizeDecimalInput,
+  sanitizeSingleLineInput
+} from '../services/inputSanitizers';
 
 const speciesOptions = [
   { label: 'Cho', value: 'dog' },
@@ -84,7 +90,12 @@ const PetEditScreen = ({ navigation, route }) => {
       return;
     }
 
-    if (!name.trim() || !breed.trim()) {
+    const cleanName = normalizeForSubmit(name);
+    const cleanBreed = normalizeForSubmit(breed);
+    const cleanBirth = normalizeForSubmit(birth);
+    const cleanWeight = normalizeForSubmit(weight);
+
+    if (!cleanName || !cleanBreed) {
       Alert.alert('Thieu thong tin', 'Vui long nhap ten va giong thu cung.');
       return;
     }
@@ -95,12 +106,12 @@ const PetEditScreen = ({ navigation, route }) => {
       : imageUploadValue || selectedPet.imageUrl;
 
     const updatedPet = updatePet(selectedPet.id, {
-      name: name.trim(),
-      breed: breed.trim(),
+      name: cleanName,
+      breed: cleanBreed,
       species,
       gender,
-      age: birth.trim() ? `Sinh: ${birth.trim()}` : 'Chua ro tuoi',
-      weight: weight.trim() ? `${weight.trim()} kg` : 'Chua ro',
+      age: cleanBirth ? `Sinh: ${cleanBirth}` : 'Chua ro tuoi',
+      weight: cleanWeight ? `${cleanWeight} kg` : 'Chua ro',
       imageUrl: nextImageUrl
     });
 
@@ -181,9 +192,12 @@ const PetEditScreen = ({ navigation, route }) => {
         <Field label="Ten thu cung">
           <TextInput
             value={name}
-            onChangeText={setName}
+            onChangeText={(value) =>
+              setName(sanitizeSingleLineInput(value, { maxLength: 60, collapseWhitespace: true }))
+            }
             placeholder="Nhap ten"
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>
@@ -207,9 +221,12 @@ const PetEditScreen = ({ navigation, route }) => {
         <Field label="Giong">
           <TextInput
             value={breed}
-            onChangeText={setBreed}
+            onChangeText={(value) =>
+              setBreed(sanitizeSingleLineInput(value, { maxLength: 80, collapseWhitespace: true }))
+            }
             placeholder="Nhap giong"
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>
@@ -231,9 +248,12 @@ const PetEditScreen = ({ navigation, route }) => {
         <Field label="Ngay sinh">
           <TextInput
             value={birth}
-            onChangeText={setBirth}
+            onChangeText={(value) => setBirth(sanitizeDateInput(value))}
             placeholder="Nhap ngay sinh"
             placeholderTextColor={theme.colors.textLight}
+            keyboardType="number-pad"
+            maxLength={10}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>
@@ -241,10 +261,11 @@ const PetEditScreen = ({ navigation, route }) => {
         <Field label="Can nang (kg)">
           <TextInput
             value={weight}
-            onChangeText={setWeight}
+            onChangeText={(value) => setWeight(sanitizeDecimalInput(value, { maxLength: 6 }))}
             placeholder="Nhap can nang"
             placeholderTextColor={theme.colors.textLight}
             keyboardType="numeric"
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>

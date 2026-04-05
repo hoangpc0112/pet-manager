@@ -45,7 +45,7 @@ const summarizeEntry = (entry) => {
 };
 
 const JournalScreen = ({ navigation }) => {
-  const { journalEntries, deleteJournalEntry, pets } = useAppData();
+  const { journalEntries, deleteJournalEntry, pets, journalCollectionName } = useAppData();
   const scrollRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedPetFilter, setSelectedPetFilter] = useState(ALL_PETS_FILTER);
@@ -102,7 +102,7 @@ const JournalScreen = ({ navigation }) => {
         }
 
         const result = await getCollectionPage({
-          collectionName: 'journalEntries',
+          collectionName: journalCollectionName,
           pageSize: PAGE_SIZE,
           cursor: pageStartCursorRef.current[page],
           orderByField: 'createdAt',
@@ -114,7 +114,7 @@ const JournalScreen = ({ navigation }) => {
       }
 
       const result = await getCollectionPage({
-        collectionName: 'journalEntries',
+        collectionName: journalCollectionName,
         pageSize: PAGE_SIZE,
         cursor: pageStartCursorRef.current[targetPage],
         orderByField: 'createdAt',
@@ -146,8 +146,20 @@ const JournalScreen = ({ navigation }) => {
       return;
     }
 
+    if (!journalCollectionName) {
+      setPageEntries([]);
+      return;
+    }
+
     loadPage(currentPage);
-  }, [currentPage, journalEntries.length, selectedPetFilter, filteredEntries.length, filteredPageEntries]);
+  }, [
+    currentPage,
+    journalCollectionName,
+    journalEntries.length,
+    selectedPetFilter,
+    filteredEntries.length,
+    filteredPageEntries
+  ]);
 
   const summary = {
     month: selectedPetFilter === ALL_PETS_FILTER ? 'Tháng hiện tại' : `Nhật ký của ${selectedPetFilter}`,
@@ -162,7 +174,7 @@ const JournalScreen = ({ navigation }) => {
   }, [pets, selectedPetFilter]);
 
   const handleDelete = (entry) => {
-    Alert.alert('Xoa nhat ky', `Ban co chac chan muon xoa "${entry.title}"?`, [
+    Alert.alert('Xoá nhật ký', `ạn có chắc chắn muốn xóa "${entry.title}"?`, [
       {
         text: 'Huy',
         style: 'cancel'
@@ -231,7 +243,7 @@ const JournalScreen = ({ navigation }) => {
             </View>
             <Text style={styles.entryNote}>{summarizeEntry(entry)}</Text>
             <TouchableOpacity style={styles.detailButton} onPress={() => openDetail(entry)}>
-              <Text style={styles.detailButtonText}>Xem chi tiet</Text>
+              <Text style={styles.detailButtonText}>Xem chi tiết</Text>
               <Ionicons name="chevron-forward" size={14} color={theme.colors.primary} />
             </TouchableOpacity>
           </Card>

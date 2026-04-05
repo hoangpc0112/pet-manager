@@ -1,5 +1,5 @@
 ﻿import React, { useMemo, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Screen from '../components/Screen';
@@ -9,6 +9,48 @@ import ProgressSteps from '../components/ProgressSteps';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
+import { normalizeForSubmit, sanitizeSingleLineInput } from '../services/inputSanitizers';
+
+const DEFAULT_GROUPED_SYMPTOMS = {
+  digestive: ['Nôn', 'Tiêu chảy', 'Chán ăn'],
+  skin: ['Ngứa da', 'Rụng lông nhiều', 'Nổi mẩn đỏ'],
+  respiratory: ['Ho', 'Hắt hơi', 'Thở gấp'],
+  injury: ['Đi lại khó khăn'],
+  behavior: ['Mệt mỏi'],
+  eyes: ['Chảy nước mắt'],
+  ears: ['Tai có mùi'],
+  urinary: ['Tiểu khó', 'Uống nước nhiều bất thường'],
+  other: []
+};
+
+const buildSymptomsByGroup = (symptomList) => {
+  const options = Array.isArray(symptomList) ? symptomList : [];
+  const hasGroupedShape = options.some((item) => item && typeof item === 'object');
+
+  if (hasGroupedShape) {
+    return options.reduce((acc, item) => {
+      const groupId = item?.groupId;
+      const label = item?.label || item?.name || '';
+      if (!groupId || !label) return acc;
+
+      if (!Array.isArray(acc[groupId])) {
+        acc[groupId] = [];
+      }
+
+      if (!acc[groupId].includes(label)) {
+        acc[groupId].push(label);
+      }
+      return acc;
+    }, {});
+  }
+
+  return DEFAULT_GROUPED_SYMPTOMS;
+};
+
+const includesSymptomIgnoreCase = (items, value) => {
+  const normalized = String(value || '').toLowerCase();
+  return (items || []).some((item) => String(item || '').toLowerCase() === normalized);
+};
 
 const SymptomStep2Screen = ({ navigation, route }) => {
   const { symptomMeta, symptomOptions } = useAppData();
@@ -25,6 +67,7 @@ const SymptomStep2Screen = ({ navigation, route }) => {
   const [severity, setSeverity] = useState(3);
   const [symptomImageUri, setSymptomImageUri] = useState('');
   const [symptomImageDataUri, setSymptomImageDataUri] = useState('');
+  const [customSymptomInput, setCustomSymptomInput] = useState('');
 
   const basePayload = useMemo(
     () => ({
@@ -36,10 +79,36 @@ const SymptomStep2Screen = ({ navigation, route }) => {
     [route?.params]
   );
 
+  const groupedSymptoms = useMemo(() => buildSymptomsByGroup(symptomList), [symptomList]);
+  const selectedGroupSymptoms = useMemo(
+    () => groupedSymptoms[basePayload.selectedGroupId] || [],
+    [basePayload.selectedGroupId, groupedSymptoms]
+  );
+  const canContinueToReview = selectedSymptoms.length > 0;
+  const customSelectedSymptoms = useMemo(
+    () => selectedSymptoms.filter((item) => !includesSymptomIgnoreCase(selectedGroupSymptoms, item)),
+    [selectedGroupSymptoms, selectedSymptoms]
+  );
+
   const toggleSymptom = (name) => {
     setSelectedSymptoms((prev) =>
       prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]
     );
+  };
+
+  const addCustomSymptom = () => {
+    const cleanValue = normalizeForSubmit(customSymptomInput);
+    if (!cleanValue) return;
+
+    const matchedPredefined = selectedGroupSymptoms.find(
+      (item) => String(item).toLowerCase() === cleanValue.toLowerCase()
+    );
+    const symptomToAdd = matchedPredefined || cleanValue;
+
+    setSelectedSymptoms((prev) =>
+      includesSymptomIgnoreCase(prev, symptomToAdd) ? prev : [...prev, symptomToAdd]
+    );
+    setCustomSymptomInput('');
   };
 
   const handlePickImage = async () => {
@@ -79,10 +148,45 @@ const SymptomStep2Screen = ({ navigation, route }) => {
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Triệu chứng đang gặp</Text>
         <View style={styles.chipsRow}>
-          {symptomList.map((item) => (
+          {selectedGroupSymptoms.map((item) => (
             <Chip key={item} label={item} active={selectedSymptoms.includes(item)} onPress={() => toggleSymptom(item)} />
           ))}
         </View>
+
+        {selectedGroupSymptoms.length === 0 ? (
+          <Text style={styles.emptyHint}>Nhóm này chưa có danh sách sẵn. Hãy nhập triệu chứng đang gặp bên dưới.</Text>
+        ) : null}
+
+        <Text style={styles.customSymptomLabel}>Triệu chứng khác</Text>
+        <View style={styles.customSymptomRow}>
+          <TextInput
+            value={customSymptomInput}
+            onChangeText={(value) =>
+              setCustomSymptomInput(sanitizeSingleLineInput(value, { maxLength: 120, collapseWhitespace: true }))
+            }
+            onSubmitEditing={addCustomSymptom}
+            placeholder="Nhập triệu chứng không có trong danh sách"
+            placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
+            returnKeyType="done"
+            blurOnSubmit
+            style={styles.customSymptomInput}
+          />
+          <TouchableOpacity style={styles.addSymptomButton} onPress={addCustomSymptom}>
+            <Text style={styles.addSymptomButtonText}>Thêm</Text>
+          </TouchableOpacity>
+        </View>
+
+        {customSelectedSymptoms.length > 0 ? (
+          <>
+            <Text style={styles.customSelectedLabel}>Triệu chứng đã thêm</Text>
+            <View style={styles.chipsRow}>
+              {customSelectedSymptoms.map((item) => (
+                <Chip key={`custom-${item}`} label={item} active onPress={() => toggleSymptom(item)} />
+              ))}
+            </View>
+          </>
+        ) : null}
       </Card>
 
       <Card style={styles.card}>
@@ -181,6 +285,7 @@ const SymptomStep2Screen = ({ navigation, route }) => {
             symptomImageDataUri: symptomImageDataUri || null
           })
         }
+        disabled={!canContinueToReview}
         style={styles.primaryButton}
       />
     </Screen>
@@ -232,6 +337,50 @@ const styles = StyleSheet.create({
   chipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap'
+  },
+  emptyHint: {
+    ...theme.typography.small,
+    color: theme.colors.textMuted,
+    marginTop: 4,
+    marginBottom: 10
+  },
+  customSymptomLabel: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    marginTop: 4,
+    marginBottom: 8
+  },
+  customSymptomRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  customSymptomInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    ...theme.typography.caption,
+    color: theme.colors.text
+  },
+  addSymptomButton: {
+    marginLeft: 8,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14
+  },
+  addSymptomButtonText: {
+    ...theme.typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700'
+  },
+  customSelectedLabel: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    marginTop: 10,
+    marginBottom: 8
   },
   metaLabel: {
     ...theme.typography.caption,

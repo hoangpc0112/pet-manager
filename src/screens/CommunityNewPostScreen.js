@@ -7,6 +7,7 @@ import Card from '../components/Card';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
 import { useAuth } from '../context/AuthContext';
+import { normalizeForSubmit, sanitizeMultilineInput, sanitizeSingleLineInput } from '../services/inputSanitizers';
 
 const categories = ['Hỏi đáp', 'review', 'Mạng xã hội'];
 
@@ -54,7 +55,10 @@ const CommunityNewPostScreen = ({ navigation }) => {
   };
 
   const handlePublish = async () => {
-    if (!title.trim() || !content.trim()) {
+    const cleanTitle = normalizeForSubmit(title);
+    const cleanContent = normalizeForSubmit(content);
+
+    if (!cleanTitle || !cleanContent) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề và nội dung.');
       return;
     }
@@ -67,11 +71,11 @@ const CommunityNewPostScreen = ({ navigation }) => {
     setIsPublishing(true);
 
     addCommunityPost({
-      title: title.trim(),
+      title: cleanTitle,
       author: user?.displayName || profileOverview?.name || 'Bạn',
       authorAvatarUrl: user?.photoURL || profileOverview?.avatarUrl || '',
       category,
-      content: content.trim(),
+      content: cleanContent,
       imageUrl: imageDataUri || null,
       tags: [],
       location: category === 'Mạng xã hội' ? '' : servicePlace,
@@ -99,9 +103,12 @@ const CommunityNewPostScreen = ({ navigation }) => {
         <Field label="Tiêu đề">
           <TextInput
             value={title}
-            onChangeText={setTitle}
+            onChangeText={(value) =>
+              setTitle(sanitizeSingleLineInput(value, { maxLength: 140, collapseWhitespace: true }))
+            }
             placeholder="Nhập tiêu đề bài viết"
             placeholderTextColor={theme.colors.textLight}
+            autoCorrect={false}
             style={styles.fieldInput}
           />
         </Field>
@@ -161,10 +168,11 @@ const CommunityNewPostScreen = ({ navigation }) => {
           <Text style={styles.fieldLabel}>Nội dung <Text style={styles.required}>*</Text></Text>
           <TextInput
             value={content}
-            onChangeText={setContent}
+            onChangeText={(value) => setContent(sanitizeMultilineInput(value, { maxLength: 2000 }))}
             placeholder="Mô tả chi tiết để cộng đồng hỗ trợ tốt hơn"
             placeholderTextColor={theme.colors.textLight}
             multiline
+            autoCorrect={false}
             style={[styles.fieldInput, styles.textArea]}
             textAlignVertical="top"
           />

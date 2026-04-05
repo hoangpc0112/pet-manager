@@ -33,6 +33,7 @@ const PetsScreen = ({ navigation }) => {
   }, [pets, keyword]);
 
   const isSearching = keyword.trim().length > 0;
+  const totalPets = pets.length;
   const totalPages = Math.max(1, Math.ceil((isSearching ? filteredPets.length : pets.length) / PAGE_SIZE));
   const visiblePets = useMemo(() => {
     if (isSearching) {
@@ -136,6 +137,8 @@ const PetsScreen = ({ navigation }) => {
         />
       </View>
 
+      <Text style={styles.totalPetsText}>Tổng số thú cưng: {totalPets}</Text>
+
       {visiblePets.map((pet) => (
         <TouchableOpacity
           key={pet.id}
@@ -220,6 +223,11 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     flex: 1,
     color: theme.colors.text
+  },
+  totalPetsText: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    marginBottom: theme.spacing.md
   },
   petCard: {
     flexDirection: 'row',

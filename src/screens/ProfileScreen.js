@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: theme.colors.textLight,
     letterSpacing: 1.4,
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.xxs,
     marginBottom: theme.spacing.md,
     fontWeight: '600'
   },

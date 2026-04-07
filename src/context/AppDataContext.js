@@ -470,6 +470,93 @@ export const AppDataProvider = ({ children }) => {
     setNearbyServicesCache(filterVisibleServices(appConfigServices));
   }, [appConfigServices, nearbyServicesMeta.sourceType]);
 
+  useEffect(() => {
+    if (!currentUserId) return;
+    if (!Array.isArray(pets) || pets.length === 0) return;
+
+    const petNameById = new Map(pets.map((pet) => [pet.id, pet.name]));
+    const petIdByName = new Map(pets.map((pet) => [pet.name, pet.id]));
+
+    const rawReminders = Array.isArray(appConfig.reminderItems) ? appConfig.reminderItems : [];
+    let remindersChanged = false;
+    const nextReminderItems = rawReminders.map((item) => {
+      if (!item) return item;
+
+      if (item.petId && petNameById.has(item.petId)) {
+        const petName = petNameById.get(item.petId);
+        if (item.pet !== petName) {
+          remindersChanged = true;
+          return { ...item, pet: petName, updatedAt: Date.now() };
+        }
+        return item;
+      }
+
+      if (item.pet && item.pet !== 'Tất cả' && petIdByName.has(item.pet)) {
+        remindersChanged = true;
+        return { ...item, petId: petIdByName.get(item.pet), updatedAt: Date.now() };
+      }
+
+      return item;
+    });
+
+    if (remindersChanged) {
+      reminderItemsRef.current = nextReminderItems;
+
+      setAppConfig((prev) => ({
+        ...prev,
+        reminderItems: nextReminderItems
+      }));
+
+      setDocument(appConfigCollectionPath, 'main', {
+        reminderItems: nextReminderItems,
+        updatedAt: Date.now()
+      }).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to backfill reminder pet info:', error);
+      });
+    }
+
+    if (!Array.isArray(journalEntries) || journalEntries.length === 0) return;
+
+    let journalChanged = false;
+    const nextJournalEntries = journalEntries.map((entry) => {
+      if (!entry) return entry;
+
+      if (entry.petId && petNameById.has(entry.petId)) {
+        const petName = petNameById.get(entry.petId);
+        if (entry.pet !== petName) {
+          journalChanged = true;
+          return { ...entry, pet: petName, updatedAt: Date.now() };
+        }
+        return entry;
+      }
+
+      if (entry.pet && petIdByName.has(entry.pet)) {
+        journalChanged = true;
+        return { ...entry, petId: petIdByName.get(entry.pet), updatedAt: Date.now() };
+      }
+
+      return entry;
+    });
+
+    if (journalChanged) {
+      setJournalEntries(nextJournalEntries);
+      const prevById = new Map(journalEntries.map((entry) => [entry.id, entry]));
+      nextJournalEntries.forEach((entry) => {
+        const prevEntry = prevById.get(entry.id);
+        if (prevEntry?.pet === entry?.pet && prevEntry?.petId === entry?.petId) return;
+        setDocument(journalCollectionPath, entry.id, {
+          pet: entry.pet,
+          petId: entry.petId || null,
+          updatedAt: entry.updatedAt
+        }).catch((error) => {
+          // eslint-disable-next-line no-console
+          console.error('Failed to backfill journal pet info:', error);
+        });
+      });
+    }
+  }, [appConfig.reminderItems, appConfigCollectionPath, currentUserId, journalCollectionPath, journalEntries, pets]);
+
   const saveJournalEntry = (entry) => {
     if (!currentUserId) return null;
 
@@ -479,10 +566,12 @@ export const AppDataProvider = ({ children }) => {
         ? 'symptom'
         : 'manual';
 
+    const petId = pets.find((pet) => pet.name === entry.pet)?.id || null;
     const nextEntry = {
       id: makeId('log'),
       title: entry.title,
       pet: entry.pet,
+      petId,
       date: entry.date,
       note: entry.note,
       category: entry.category || 'Khác',
@@ -571,6 +660,47 @@ export const AppDataProvider = ({ children }) => {
             console.error('Failed to update journal pet name:', error);
           });
         });
+
+      const baseReminderItems = Array.isArray(reminderItemsRef.current)
+        ? reminderItemsRef.current
+        : Array.isArray(appConfig.reminderItems)
+          ? appConfig.reminderItems
+          : [];
+      const updatedAt = Date.now();
+      let remindersUpdated = false;
+      const nextReminderItems = baseReminderItems.map((item) => {
+        const matchesById = item?.petId && item.petId === petId;
+        const matchesByName = item?.pet === currentPet.name;
+        if (!matchesById && !matchesByName) return item;
+
+        if (item.pet !== nextPet.name || (item.petId || '') !== petId) {
+          remindersUpdated = true;
+        }
+
+        return {
+          ...item,
+          pet: nextPet.name,
+          petId: item.petId || petId,
+          updatedAt
+        };
+      });
+
+      if (remindersUpdated) {
+        reminderItemsRef.current = nextReminderItems;
+
+        setAppConfig((prev) => ({
+          ...prev,
+          reminderItems: nextReminderItems
+        }));
+
+        setDocument(appConfigCollectionPath, 'main', {
+          reminderItems: nextReminderItems,
+          updatedAt
+        }).catch((error) => {
+          // eslint-disable-next-line no-console
+          console.error('Failed to update reminder pet name:', error);
+        });
+      }
     }
 
     return nextPet;

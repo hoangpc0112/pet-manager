@@ -52,7 +52,7 @@ const PetsScreen = ({ navigation }) => {
   useEffect(() => {
     pageDataCacheRef.current = {};
     pageStartCursorRef.current = { 1: null };
-  }, [pets.length]);
+  }, [pets]);
 
   const loadPage = async (targetPage) => {
     if (isSearching) return;
@@ -111,7 +111,7 @@ const PetsScreen = ({ navigation }) => {
       }
       loadPage(currentPage);
     }
-  }, [currentPage, isSearching, pets.length, petsCollectionName]);
+  }, [currentPage, isSearching, pets, petsCollectionName]);
 
   return (
     <Screen contentContainerStyle={styles.container} scrollViewRef={scrollRef}>

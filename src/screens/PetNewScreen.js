@@ -21,6 +21,8 @@ const speciesOptions = [
 ];
 
 const genderOptions = ['Đực', 'Cái', 'Chưa rõ'];
+const DEFAULT_PET_IMAGE =
+  'https://images.unsplash.com/photo-1450778869180-41d0601e046e?q=80&w=400&auto=format&fit=crop';
 
 const formatDate = (date) =>
   `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
@@ -123,6 +125,11 @@ const PetNewScreen = ({ navigation }) => {
       return;
     }
 
+    if (!imageDataUri) {
+      Alert.alert('Thiếu ảnh', 'Vui lòng thêm ảnh cho thú cưng trước khi lưu.');
+      return;
+    }
+
     if (species === 'other' && !cleanSpeciesOther) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập loài khác cho thú cưng.');
       return;
@@ -143,7 +150,7 @@ const PetNewScreen = ({ navigation }) => {
       gender,
       age: cleanBirth ? `Sinh: ${cleanBirth}` : 'Chưa rõ tuổi',
       weight: cleanWeight ? `${cleanWeight} kg` : 'Chưa rõ',
-      imageUrl: imageDataUri || undefined
+      imageUrl: imageDataUri
     });
 
     setIsSubmitting(false);

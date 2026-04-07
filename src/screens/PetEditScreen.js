@@ -64,7 +64,7 @@ const PetEditScreen = ({ navigation, route }) => {
   const [species, setSpecies] = useState(selectedPet?.species || 'dog');
   const [breed, setBreed] = useState(selectedPet?.breed || '');
   const [speciesOther, setSpeciesOther] = useState(selectedPet?.speciesDetail || '');
-  const [gender, setGender] = useState(selectedPet?.gender || 'Duc');
+  const [gender, setGender] = useState(selectedPet?.gender || 'Đực');
   const [birth, setBirth] = useState(parseBirth(selectedPet?.age));
   const [weight, setWeight] = useState(parseWeight(selectedPet?.weight));
   const [imageUri, setImageUri] = useState(selectedPet?.imageUrl || '');

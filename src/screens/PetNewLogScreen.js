@@ -39,6 +39,7 @@ const PetNewLogScreen = ({ navigation, route }) => {
   const [title, setTitle] = useState('');
   const [petId, setPetId] = useState(initialPetId);
   const [category, setCategory] = useState(categories[0]);
+  const [categoryOther, setCategoryOther] = useState('');
   const [date, setDate] = useState(formatDate(new Date()));
   const [note, setNote] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -58,6 +59,12 @@ const PetNewLogScreen = ({ navigation, route }) => {
       setPetId(pets[0].id);
     }
   }, [pets, petId]);
+
+  useEffect(() => {
+    if (category !== 'Khác') {
+      setCategoryOther('');
+    }
+  }, [category]);
 
   useEffect(() => {
     const maxDay = getDaysInMonth(pickerMonth, pickerYear);
@@ -84,18 +91,26 @@ const PetNewLogScreen = ({ navigation, route }) => {
     const cleanTitle = normalizeForSubmit(title);
     const cleanNote = normalizeForSubmit(note);
     const cleanDate = normalizeForSubmit(date);
+    const cleanCategoryOther = normalizeForSubmit(categoryOther);
 
     if (!cleanTitle || !cleanNote || !selectedPet) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề, chọn thú cưng và ghi chú.');
       return;
     }
 
+    if (category === 'Khác' && !cleanCategoryOther) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập danh mục khác.');
+      return;
+    }
+
+    const finalCategory = category === 'Khác' ? cleanCategoryOther : category;
+
     saveJournalEntry({
       title: cleanTitle,
       pet: selectedPet.name,
       date: cleanDate || new Date().toLocaleDateString('vi-VN'),
       note: cleanNote,
-      category,
+      category: finalCategory,
       source: 'manual'
     });
 
@@ -164,6 +179,21 @@ const PetNewLogScreen = ({ navigation, route }) => {
             ))}
           </View>
         </Field>
+
+        {category === 'Khác' ? (
+          <Field label="Danh mục khác">
+            <TextInput
+              value={categoryOther}
+              onChangeText={(value) =>
+                setCategoryOther(sanitizeSingleLineInput(value, { maxLength: 60, collapseWhitespace: true }))
+              }
+              placeholder="Nhập danh mục"
+              placeholderTextColor={theme.colors.textLight}
+              autoCorrect={false}
+              style={styles.fieldInput}
+            />
+          </Field>
+        ) : null}
 
         <Field label="Ngày">
           <TouchableOpacity style={styles.dateButton} onPress={openDatePicker}>

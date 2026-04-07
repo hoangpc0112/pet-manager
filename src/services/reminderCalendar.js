@@ -18,6 +18,14 @@ const parseTimeToParts = (timeText) => {
   };
 };
 
+const parseDateToParts = (dateText) => {
+  if (!dateText || typeof dateText !== 'string') return null;
+  const parts = dateText.split('/').map((item) => Number.parseInt(item, 10));
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const [day, month, year] = parts;
+  return { day, month, year };
+};
+
 const parseVnWeekdays = (repeatText) => {
   const text = String(repeatText || '').toLowerCase();
   const regex = /thứ\s*(\d)/g;
@@ -32,11 +40,16 @@ const parseVnWeekdays = (repeatText) => {
     match = regex.exec(text);
   }
 
+  if (text.includes('chủ nhật') || text.includes('chu nhat')) {
+    values.push(8);
+  }
+
   return Array.from(new Set(values));
 };
 
 const toExpoWeekday = (vnWeekday) => {
   // Expo Calendar: 1 Sunday, 2 Monday ... 7 Saturday
+  if (vnWeekday === 8) return 1;
   if (vnWeekday === 2) return 2;
   if (vnWeekday === 3) return 3;
   if (vnWeekday === 4) return 4;
@@ -46,13 +59,17 @@ const toExpoWeekday = (vnWeekday) => {
   return null;
 };
 
-const buildStartDate = (timeText) => {
+const buildStartDate = (timeText, dateText) => {
   const { hour, minute } = parseTimeToParts(timeText);
   const now = new Date();
-  const startDate = new Date(now);
+  const dateParts = parseDateToParts(dateText);
+  const startDate = dateParts
+    ? new Date(dateParts.year, dateParts.month - 1, dateParts.day)
+    : new Date(now);
+
   startDate.setHours(hour, minute, 0, 0);
 
-  if (startDate.getTime() <= now.getTime()) {
+  if (!dateParts && startDate.getTime() <= now.getTime()) {
     startDate.setDate(startDate.getDate() + 1);
   }
 
@@ -74,6 +91,10 @@ const resolveCalendarId = async () => {
 
 const buildRecurrenceRule = (repeatText) => {
   const text = String(repeatText || '').toLowerCase();
+  if (text.includes('khong lap lai') || text.includes('không lặp lại') || text.includes('mot lan') || text.includes('một lần')) {
+    return null;
+  }
+
   const vnWeekdays = parseVnWeekdays(text);
 
   if (vnWeekdays.length > 0) {
@@ -115,10 +136,11 @@ export const createReminderCalendarEvent = async (reminder) => {
   if (!granted) return '';
 
   const calendarId = await resolveCalendarId();
-  const startDate = buildStartDate(reminder?.time);
+  const startDate = buildStartDate(reminder?.time, reminder?.date);
   const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  const recurrenceRule = buildRecurrenceRule(reminder?.repeat);
   const eventId = await Calendar.createEventAsync(calendarId, {
     title: reminder?.title || 'Nhắc nhở chăm sóc thú cưng',
     notes: [reminder?.pet, reminder?.repeat].filter(Boolean).join(' • '),
@@ -126,7 +148,7 @@ export const createReminderCalendarEvent = async (reminder) => {
     endDate,
     timeZone: timezone,
     alarms: [{ relativeOffset: -5 }],
-    recurrenceRule: buildRecurrenceRule(reminder?.repeat)
+    ...(recurrenceRule ? { recurrenceRule } : {})
   });
 
   return eventId || '';

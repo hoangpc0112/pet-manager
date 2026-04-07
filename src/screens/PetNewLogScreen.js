@@ -95,7 +95,8 @@ const PetNewLogScreen = ({ navigation, route }) => {
       pet: selectedPet.name,
       date: cleanDate || new Date().toLocaleDateString('vi-VN'),
       note: cleanNote,
-      category
+      category,
+      source: 'manual'
     });
 
     Alert.alert('Thành công', 'Đã lưu nhật ký mới.', [

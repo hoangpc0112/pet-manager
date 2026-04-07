@@ -22,6 +22,20 @@ import { normalizeForSubmit, sanitizeSingleLineInput } from '../services/inputSa
 const formatTime = (date) =>
   `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
+const formatDate = (date) =>
+  `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+
+const parseDate = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  const parts = value.split('/').map((item) => Number.parseInt(item, 10));
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const [day, month, year] = parts;
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getDaysInMonth = (month, year) => new Date(year, month, 0).getDate();
+
 const parseTime = (value) => {
   if (!value || typeof value !== 'string') return null;
   const parts = value.split(':').map((item) => Number.parseInt(item, 10));
@@ -33,13 +47,29 @@ const parseTime = (value) => {
 };
 
 const DEFAULT_REMINDER_REPEAT = 'Thứ 2, Thứ 3, Thứ 4, Thứ 5, Thứ 6';
-const REPEAT_OPTIONS = [
-  DEFAULT_REMINDER_REPEAT,
-  'Mỗi ngày',
-  'Mỗi tuần',
-  'Thứ 2, Thứ 4, Thứ 6',
-  'Thứ 3, Thứ 5, Thứ 7'
+const DEFAULT_REPEAT_DAYS = [2, 3, 4, 5, 6];
+const DEFAULT_FIXED_REPEAT = 'Không lặp lại';
+const REMINDER_MODE_FIXED = 'fixed';
+const REMINDER_MODE_WEEKLY = 'weekly';
+const WEEKDAY_OPTIONS = [
+  { value: 2, label: 'Thứ 2', full: 'Thứ 2' },
+  { value: 3, label: 'Thứ 3', full: 'Thứ 3' },
+  { value: 4, label: 'Thứ 4', full: 'Thứ 4' },
+  { value: 5, label: 'Thứ 5', full: 'Thứ 5' },
+  { value: 6, label: 'Thứ 6', full: 'Thứ 6' },
+  { value: 7, label: 'Thứ 7', full: 'Thứ 7' },
+  { value: 8, label: 'Chủ nhật', full: 'Chủ nhật' }
 ];
+const WEEKDAY_ORDER = WEEKDAY_OPTIONS.map((option) => option.value);
+const WEEKDAY_TEXT = WEEKDAY_OPTIONS.reduce((acc, option) => ({ ...acc, [option.value]: option.full }), {});
+
+const buildRepeatText = (days) => {
+  const normalized = Array.from(new Set(days)).filter((day) => WEEKDAY_ORDER.includes(day));
+  if (normalized.length === 0) return DEFAULT_REMINDER_REPEAT;
+
+  const ordered = WEEKDAY_ORDER.filter((day) => normalized.includes(day));
+  return ordered.map((day) => WEEKDAY_TEXT[day]).join(', ');
+};
 
 const ReminderNewScreen = ({ navigation, route }) => {
   const { pets, createReminder, getPetById } = useAppData();
@@ -51,14 +81,25 @@ const ReminderNewScreen = ({ navigation, route }) => {
 
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('08:00');
-  const [repeat, setRepeat] = useState(DEFAULT_REMINDER_REPEAT);
+  const [selectedWeekdays, setSelectedWeekdays] = useState(DEFAULT_REPEAT_DAYS);
+  const [repeatMode, setRepeatMode] = useState(REMINDER_MODE_WEEKLY);
+  const [fixedDate, setFixedDate] = useState(formatDate(new Date()));
   const [selectedPetId, setSelectedPetId] = useState('');
   const [pickerValue, setPickerValue] = useState(parseTime('08:00') || new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showPetPicker, setShowPetPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [iosHour, setIosHour] = useState(8);
   const [iosMinute, setIosMinute] = useState(0);
+  const [pickerDay, setPickerDay] = useState(new Date().getDate());
+  const [pickerMonth, setPickerMonth] = useState(new Date().getMonth() + 1);
+  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+  const repeatText = useMemo(() => buildRepeatText(selectedWeekdays), [selectedWeekdays]);
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 16 }, (_, index) => currentYear - 5 + index);
+  }, []);
 
   const selectedPet = useMemo(
     () => petOptions.find((pet) => pet.id === selectedPetId) || null,
@@ -78,14 +119,38 @@ const ReminderNewScreen = ({ navigation, route }) => {
     }
   }, [fallbackPetId, getPetById, route?.params?.preselectedPetId, selectedPetId]);
 
+  useEffect(() => {
+    const maxDay = getDaysInMonth(pickerMonth, pickerYear);
+    if (pickerDay > maxDay) {
+      setPickerDay(maxDay);
+    }
+  }, [pickerDay, pickerMonth, pickerYear]);
+
   const resetForm = () => {
     setTitle('');
     setTime('08:00');
-    setRepeat(DEFAULT_REMINDER_REPEAT);
+    setSelectedWeekdays(DEFAULT_REPEAT_DAYS);
+    setRepeatMode(REMINDER_MODE_WEEKLY);
+    setFixedDate(formatDate(new Date()));
     setSelectedPetId(fallbackPetId);
     setPickerValue(parseTime('08:00') || new Date());
     setIosHour(8);
     setIosMinute(0);
+    setPickerDay(new Date().getDate());
+    setPickerMonth(new Date().getMonth() + 1);
+    setPickerYear(new Date().getFullYear());
+  };
+
+  const toggleWeekday = (value) => {
+    setSelectedWeekdays((prev) => {
+        const exists = prev.includes(value);
+        if (exists) {
+          const next = prev.filter((day) => day !== value);
+          if (next.length === 0) return prev;
+          return next;
+        }
+      return [...prev, value];
+    });
   };
 
   const openTimePicker = () => {
@@ -119,12 +184,27 @@ const ReminderNewScreen = ({ navigation, route }) => {
     setShowTimePicker(false);
   };
 
+  const openDatePicker = () => {
+    const sourceDate = parseDate(fixedDate) || new Date();
+    setPickerDay(sourceDate.getDate());
+    setPickerMonth(sourceDate.getMonth() + 1);
+    setPickerYear(sourceDate.getFullYear());
+    setShowDatePicker(true);
+  };
+
+  const confirmDate = () => {
+    const value = `${String(pickerDay).padStart(2, '0')}/${String(pickerMonth).padStart(2, '0')}/${pickerYear}`;
+    setFixedDate(value);
+    setShowDatePicker(false);
+  };
+
   const handleSubmit = async () => {
     if (isSubmitting) return;
 
     const cleanTitle = normalizeForSubmit(title);
     const cleanTime = normalizeForSubmit(time);
-    const cleanRepeat = normalizeForSubmit(repeat);
+    const cleanRepeat = normalizeForSubmit(repeatText);
+    const cleanFixedDate = normalizeForSubmit(fixedDate);
 
     if (!cleanTitle) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề nhắc nhở.');
@@ -136,10 +216,27 @@ const ReminderNewScreen = ({ navigation, route }) => {
       return;
     }
 
+    if (repeatMode === REMINDER_MODE_FIXED) {
+      const parsed = parseDate(cleanFixedDate);
+      if (!parsed) {
+        Alert.alert('Thiếu thông tin', 'Vui lòng chọn ngày nhắc nhở cố định.');
+        return;
+      }
+
+      const timeParts = parseTime(cleanTime) || new Date();
+      const scheduled = new Date(parsed);
+      scheduled.setHours(timeParts.getHours(), timeParts.getMinutes(), 0, 0);
+      if (scheduled.getTime() <= Date.now()) {
+        Alert.alert('Ngày không hợp lệ', 'Vui lòng chọn thời gian trong tương lai.');
+        return;
+      }
+    }
+
     const payload = {
       title: cleanTitle,
       time: cleanTime,
-      repeat: cleanRepeat || DEFAULT_REMINDER_REPEAT,
+      repeat: repeatMode === REMINDER_MODE_FIXED ? DEFAULT_FIXED_REPEAT : cleanRepeat || DEFAULT_REMINDER_REPEAT,
+      date: repeatMode === REMINDER_MODE_FIXED ? cleanFixedDate : '',
       pet: selectedPet.name,
       petId: selectedPet.id
     };
@@ -211,22 +308,56 @@ const ReminderNewScreen = ({ navigation, route }) => {
         </TouchableOpacity>
 
         <View style={styles.repeatBlock}>
-          <Text style={styles.inputButtonLabel}>Lặp lại</Text>
+          <Text style={styles.inputButtonLabel}>Loại nhắc nhở</Text>
           <View style={styles.repeatOptionsRow}>
-            {REPEAT_OPTIONS.map((option) => {
-              const isActive = option === repeat;
-              return (
-                <TouchableOpacity
-                  key={option}
-                  style={[styles.repeatOption, isActive && styles.repeatOptionActive]}
-                  onPress={() => setRepeat(option)}
-                >
-                  <Text style={[styles.repeatOptionText, isActive && styles.repeatOptionTextActive]}>{option}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            <TouchableOpacity
+              style={[styles.repeatOption, repeatMode === REMINDER_MODE_FIXED && styles.repeatOptionActive]}
+              onPress={() => setRepeatMode(REMINDER_MODE_FIXED)}
+            >
+              <Text style={[styles.repeatOptionText, repeatMode === REMINDER_MODE_FIXED && styles.repeatOptionTextActive]}>
+                Ngày cố định
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.repeatOption, repeatMode === REMINDER_MODE_WEEKLY && styles.repeatOptionActive]}
+              onPress={() => setRepeatMode(REMINDER_MODE_WEEKLY)}
+            >
+              <Text style={[styles.repeatOptionText, repeatMode === REMINDER_MODE_WEEKLY && styles.repeatOptionTextActive]}>
+                Lặp theo tuần
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
+
+        {repeatMode === REMINDER_MODE_FIXED ? (
+          <TouchableOpacity style={styles.inputButton} onPress={openDatePicker}>
+            <View>
+              <Text style={styles.inputButtonLabel}>Ngày nhắc</Text>
+              <Text style={styles.inputButtonValue}>{fixedDate}</Text>
+            </View>
+            <Ionicons name="calendar-outline" size={18} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.repeatBlock}>
+            <Text style={styles.inputButtonLabel}>Chọn thứ</Text>
+            <View style={styles.repeatOptionsRow}>
+              {WEEKDAY_OPTIONS.map((option) => {
+                const isActive = selectedWeekdays.includes(option.value);
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.repeatOption, isActive && styles.repeatOptionActive]}
+                    onPress={() => toggleWeekday(option.value)}
+                  >
+                    <Text style={[styles.repeatOptionText, isActive && styles.repeatOptionTextActive]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         <TouchableOpacity style={styles.inputButton} onPress={() => setShowPetPicker(true)}>
           <View>
@@ -331,6 +462,73 @@ const ReminderNewScreen = ({ navigation, route }) => {
                 );
               })
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showDatePicker} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowDatePicker(false)}>
+          <Pressable style={styles.modalSheet} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <Text style={styles.modalActionText}>Hủy</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Chọn ngày</Text>
+              <TouchableOpacity onPress={confirmDate}>
+                <Text style={styles.modalActionText}>Xong</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dateColumns}>
+              <View style={styles.dateColumn}>
+                <Text style={styles.dateColumnTitle}>Ngày</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: getDaysInMonth(pickerMonth, pickerYear) }, (_, i) => i + 1).map((day) => (
+                    <TouchableOpacity
+                      key={`day-${day}`}
+                      style={[styles.dateOption, pickerDay === day && styles.dateOptionActive]}
+                      onPress={() => setPickerDay(day)}
+                    >
+                      <Text style={[styles.dateOptionText, pickerDay === day && styles.dateOptionTextActive]}>
+                        {String(day).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.dateColumn}>
+                <Text style={styles.dateColumnTitle}>Tháng</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                    <TouchableOpacity
+                      key={`month-${month}`}
+                      style={[styles.dateOption, pickerMonth === month && styles.dateOptionActive]}
+                      onPress={() => setPickerMonth(month)}
+                    >
+                      <Text style={[styles.dateOptionText, pickerMonth === month && styles.dateOptionTextActive]}>
+                        {String(month).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.dateColumn}>
+                <Text style={styles.dateColumnTitle}>Năm</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {yearOptions.map((year) => (
+                    <TouchableOpacity
+                      key={`year-${year}`}
+                      style={[styles.dateOption, pickerYear === year && styles.dateOptionActive]}
+                      onPress={() => setPickerYear(year)}
+                    >
+                      <Text style={[styles.dateOptionText, pickerYear === year && styles.dateOptionTextActive]}>{year}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -486,6 +684,43 @@ const styles = StyleSheet.create({
   },
   modalActionText: {
     ...theme.typography.caption,
+    color: theme.colors.primary,
+    fontWeight: '700'
+  },
+  dateColumns: {
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+    maxHeight: 300
+  },
+  dateColumn: {
+    flex: 1,
+    marginHorizontal: 6
+  },
+  dateColumnTitle: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 8,
+    fontWeight: '600'
+  },
+  dateOption: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginBottom: 6,
+    backgroundColor: '#F3F4F6'
+  },
+  dateOptionActive: {
+    backgroundColor: theme.colors.primarySoft,
+    borderWidth: 1,
+    borderColor: theme.colors.primary
+  },
+  dateOptionText: {
+    ...theme.typography.body,
+    color: theme.colors.text
+  },
+  dateOptionTextActive: {
     color: theme.colors.primary,
     fontWeight: '700'
   },

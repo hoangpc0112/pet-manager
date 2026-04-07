@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
@@ -16,9 +16,10 @@ const parseVnDateToMs = (value) => {
 };
 
 const PetDetailScreen = ({ navigation, route }) => {
-  const { getPetById, journalEntries, pets, petQuickActions } = useAppData();
+  const { getPetById, journalEntries, pets, petQuickActions, deletePet } = useAppData();
   const quickActions = petQuickActions || [];
   const selectedPet = getPetById(route?.params?.petId) || pets[0] || null;
+  const speciesDetail = selectedPet?.species === 'other' ? selectedPet?.speciesDetail : '';
 
   if (!selectedPet) {
     return (
@@ -56,6 +57,24 @@ const PetDetailScreen = ({ navigation, route }) => {
     if (actionId === 'vaccine') navigation.navigate('PetVaccines', { petId: selectedPet.id });
   };
 
+  const handleDelete = () => {
+    Alert.alert('Xóa thú cưng', 'Bạn có chắc muốn xóa thú cưng này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa',
+        style: 'destructive',
+        onPress: () => {
+          const removed = deletePet(selectedPet.id);
+          if (!removed) {
+            Alert.alert('Không thể xóa', 'Không tìm thấy thú cưng cần xóa.');
+            return;
+          }
+          navigation.navigate('Tabs', { screen: 'Pets' });
+        }
+      }
+    ]);
+  };
+
   return (
     <Screen contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
@@ -86,6 +105,12 @@ const PetDetailScreen = ({ navigation, route }) => {
             <Ionicons name="male-female-outline" size={14} color={theme.colors.primary} />
             <Text style={styles.metaChipText}>{selectedPet.gender}</Text>
           </View>
+          {speciesDetail ? (
+            <View style={styles.metaChip}>
+              <Ionicons name="paw-outline" size={14} color={theme.colors.primary} />
+              <Text style={styles.metaChipText}>{speciesDetail}</Text>
+            </View>
+          ) : null}
           <View style={styles.metaChip}>
             <Ionicons name="calendar-outline" size={14} color={theme.colors.primary} />
             <Text style={styles.metaChipText}>{selectedPet.age}</Text>
@@ -200,6 +225,11 @@ const PetDetailScreen = ({ navigation, route }) => {
           <Ionicons name="arrow-forward" size={14} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+        <Ionicons name="trash-outline" size={18} color={theme.colors.danger} />
+        <Text style={styles.deleteButtonText}>Xóa thú cưng</Text>
+      </TouchableOpacity>
     </Screen>
   );
 };
@@ -397,6 +427,22 @@ const styles = StyleSheet.create({
   },
   streamTagTextAlert: {
     color: '#92400E'
+  },
+  deleteButton: {
+    marginTop: theme.spacing.lg,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.danger,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  deleteButtonText: {
+    ...theme.typography.caption,
+    color: theme.colors.danger,
+    fontWeight: '700',
+    marginLeft: 6
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',

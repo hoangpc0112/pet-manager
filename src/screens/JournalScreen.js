@@ -44,6 +44,13 @@ const summarizeEntry = (entry) => {
   return `${source.slice(0, SUMMARY_MAX_CHARS).trim()}...`;
 };
 
+const getEntrySourceLabel = (entry) => {
+  if (entry?.source === 'manual') return 'Nhập tay';
+  if (entry?.source === 'symptom') return 'Phân tích triệu chứng';
+  if (entry?.symptomSnapshot || entry?.aiRawResponse) return 'Phân tích triệu chứng';
+  return 'Nhập tay';
+};
+
 const JournalScreen = ({ navigation }) => {
   const { journalEntries, deleteJournalEntry, pets, journalCollectionName } = useAppData();
   const scrollRef = useRef(null);
@@ -174,13 +181,13 @@ const JournalScreen = ({ navigation }) => {
   }, [pets, selectedPetFilter]);
 
   const handleDelete = (entry) => {
-    Alert.alert('Xoá nhật ký', `ạn có chắc chắn muốn xóa "${entry.title}"?`, [
+    Alert.alert('Xoá nhật ký', `Bạn có chắc chắn muốn xóa "${entry.title}"?`, [
       {
-        text: 'Huy',
+        text: 'Huỷ',
         style: 'cancel'
       },
       {
-        text: 'Xoa',
+        text: 'Xoá',
         style: 'destructive',
         onPress: () => deleteJournalEntry(entry.id)
       }
@@ -235,7 +242,9 @@ const JournalScreen = ({ navigation }) => {
             <View style={styles.entryHeader}>
               <View style={styles.entryHeaderText}>
                 <Text style={styles.entryTitle}>{entry.title}</Text>
-                <Text style={styles.entryMeta}>{entry.pet} • {entry.date}</Text>
+                <Text style={styles.entryMeta}>
+                  {entry.pet} • {entry.date} • {getEntrySourceLabel(entry)}
+                </Text>
               </View>
               <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(entry)}>
                 <Ionicons name="trash-outline" size={18} color={theme.colors.danger} />

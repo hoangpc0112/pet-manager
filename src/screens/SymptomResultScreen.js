@@ -60,6 +60,7 @@ const SymptomResultScreen = ({ navigation, route }) => {
       date: new Date().toLocaleDateString('vi-VN'),
       note: analysisText,
       category: 'Sức khỏe',
+      source: 'symptom',
       imageUrl: payload?.symptomImageDataUri || null,
       aiRawResponse: analysisText,
       symptomSnapshot: {

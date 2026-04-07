@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import * as Location from 'expo-location';
 import {
   deleteDocument,
   getCollectionDocs,
@@ -16,6 +17,11 @@ import {
   symptomMeta as defaultSymptomMeta,
   symptomOptions as defaultSymptomOptions
 } from '../data/symptoms';
+import {
+  fetchNearbyServicesByLocation,
+  filterVisibleServices,
+  getSeedNearbyServicesByLocation
+} from '../services/nearbyServices';
 import { useAuth } from './AuthContext';
 
 const AppDataContext = createContext(null);
@@ -112,6 +118,42 @@ const parseVnDateToMs = (dateText) => {
   return Number.isNaN(value) ? 0 : value;
 };
 
+const buildSourceSummary = (places) => {
+  const sources = Array.from(new Set((places || []).map((item) => item?.source).filter(Boolean)));
+  if (sources.length === 0) return 'Theo vị trí GPS của bạn';
+  return `Nguồn miễn phí: ${sources.join(', ')}`;
+};
+
+const getCoordinatesWithTimeout = async (timeoutMs = 12000) => {
+  const timeoutPromise = new Promise((_, reject) => {
+    const timeoutHandle = setTimeout(() => {
+      clearTimeout(timeoutHandle);
+      reject(new Error('Location timeout'));
+    }, timeoutMs);
+  });
+
+  const locationPromise = (async () => {
+    const lastKnown = await Location.getLastKnownPositionAsync();
+    if (lastKnown?.coords?.latitude && lastKnown?.coords?.longitude) {
+      return {
+        latitude: lastKnown.coords.latitude,
+        longitude: lastKnown.coords.longitude
+      };
+    }
+
+    const current = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced
+    });
+
+    return {
+      latitude: current?.coords?.latitude,
+      longitude: current?.coords?.longitude
+    };
+  })();
+
+  return Promise.race([locationPromise, timeoutPromise]);
+};
+
 const getVaccinationState = ({ doneDate, nextDate, status }) => {
   if (status === 'pending') {
     return { status: 'pending', statusLabel: 'Chưa tiêm' };
@@ -154,6 +196,15 @@ export const AppDataProvider = ({ children }) => {
   const [communityPosts, setCommunityPosts] = useState([]);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [nearbyServicesCache, setNearbyServicesCache] = useState([]);
+  const [nearbyServicesMeta, setNearbyServicesMeta] = useState({
+    isLoading: true,
+    error: '',
+    sourceLabel: '',
+    sourceType: ''
+  });
+  const nearbyServicesFetchedRef = useRef(false);
+  const reminderItemsRef = useRef([]);
 
   const appConfigCollectionPath = useMemo(
     () => (currentUserId ? `users/${currentUserId}/app_config` : ''),
@@ -167,6 +218,114 @@ export const AppDataProvider = ({ children }) => {
     () => (currentUserId ? `users/${currentUserId}/journalEntries` : ''),
     [currentUserId]
   );
+  const appConfigServices = useMemo(
+    () => (Array.isArray(appConfig.nearbyServices) ? appConfig.nearbyServices : []),
+    [appConfig.nearbyServices]
+  );
+
+  const setNearbyServicesWithMeta = useCallback((items, nextMeta) => {
+    setNearbyServicesCache(filterVisibleServices(items));
+    setNearbyServicesMeta((prev) => ({
+      ...prev,
+      isLoading: false,
+      error: nextMeta.error || '',
+      sourceLabel: nextMeta.sourceLabel || '',
+      sourceType: nextMeta.sourceType || ''
+    }));
+  }, []);
+
+  const refreshNearbyServices = useCallback(async (options = {}) => {
+    const force = options.force === true;
+    if (nearbyServicesFetchedRef.current && !force) return;
+    nearbyServicesFetchedRef.current = true;
+
+    setNearbyServicesMeta((prev) => ({ ...prev, isLoading: true, error: '' }));
+    let fallbackLocation = null;
+
+    const applyConfigFallback = (errorMessage) => {
+      if (appConfigServices.length > 0) {
+        setNearbyServicesWithMeta(appConfigServices, {
+          sourceLabel: 'Dữ liệu cấu hình ứng dụng',
+          sourceType: 'config',
+          error: errorMessage
+        });
+        return;
+      }
+
+      setNearbyServicesWithMeta(getSeedNearbyServicesByLocation(null), {
+        sourceLabel: 'Dữ liệu mặc định',
+        sourceType: 'seed',
+        error: errorMessage
+      });
+    };
+
+    try {
+      const serviceEnabled = await Location.hasServicesEnabledAsync();
+      if (!serviceEnabled) {
+        applyConfigFallback('Dịch vụ vị trí trên iPhone đang tắt. Hiển thị dữ liệu gợi ý gần bạn.');
+        return;
+      }
+
+      let permission = await Location.getForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (permission.status !== 'granted') {
+        applyConfigFallback('Chưa được cấp quyền vị trí. Vào Cài đặt để cấp quyền khi dùng ứng dụng.');
+        return;
+      }
+
+      const coords = await getCoordinatesWithTimeout(12000);
+      const latitude = coords?.latitude;
+      const longitude = coords?.longitude;
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        throw new Error('Invalid GPS coordinates');
+      }
+
+      fallbackLocation = { latitude, longitude };
+
+      const remoteServices = await fetchNearbyServicesByLocation({
+        latitude,
+        longitude,
+        radiusMeters: 5000,
+        maxResults: 15
+      });
+      const filteredRemoteServices = filterVisibleServices(remoteServices);
+
+      if (filteredRemoteServices.length > 0) {
+        setNearbyServicesWithMeta(filteredRemoteServices, {
+          sourceLabel: buildSourceSummary(filteredRemoteServices),
+          sourceType: 'remote',
+          error: ''
+        });
+        return;
+      }
+
+      setNearbyServicesWithMeta(getSeedNearbyServicesByLocation({ latitude, longitude }), {
+        sourceLabel: 'Dữ liệu mặc định theo vị trí hiện tại',
+        sourceType: 'seed',
+        error: ''
+      });
+    } catch (_error) {
+      const errorMessage = 'Không lấy được vị trí hoặc dữ liệu mạng lúc này. Đã chuyển sang dữ liệu dự phòng.';
+
+      if (appConfigServices.length > 0) {
+        setNearbyServicesWithMeta(appConfigServices, {
+          sourceLabel: 'Dữ liệu cấu hình ứng dụng',
+          sourceType: 'config',
+          error: errorMessage
+        });
+      } else {
+        setNearbyServicesWithMeta(getSeedNearbyServicesByLocation(fallbackLocation), {
+          sourceLabel: fallbackLocation ? 'Dữ liệu mặc định theo vị trí hiện tại' : 'Dữ liệu mặc định',
+          sourceType: 'seed',
+          error: errorMessage
+        });
+      }
+    }
+  }, [appConfigServices, setNearbyServicesWithMeta]);
 
   const loadAppData = useCallback(async () => {
     if (!currentUserId) {
@@ -295,8 +454,30 @@ export const AppDataProvider = ({ children }) => {
     };
   }, [appConfigCollectionPath, currentUserId, isAuthLoading, journalCollectionPath, petsCollectionPath]);
 
+  useEffect(() => {
+    refreshNearbyServices();
+  }, [refreshNearbyServices]);
+
+  useEffect(() => {
+    reminderItemsRef.current = Array.isArray(appConfig.reminderItems)
+      ? appConfig.reminderItems
+      : [];
+  }, [appConfig.reminderItems]);
+
+  useEffect(() => {
+    if (nearbyServicesMeta.sourceType !== 'config') return;
+    if (appConfigServices.length === 0) return;
+    setNearbyServicesCache(filterVisibleServices(appConfigServices));
+  }, [appConfigServices, nearbyServicesMeta.sourceType]);
+
   const saveJournalEntry = (entry) => {
     if (!currentUserId) return null;
+
+    const inferredSource = entry.source
+      ? entry.source
+      : entry.symptomSnapshot || entry.aiRawResponse
+        ? 'symptom'
+        : 'manual';
 
     const nextEntry = {
       id: makeId('log'),
@@ -305,6 +486,7 @@ export const AppDataProvider = ({ children }) => {
       date: entry.date,
       note: entry.note,
       category: entry.category || 'Khác',
+      source: inferredSource,
       imageUrl: entry.imageUrl || null,
       aiAnalysis: entry.aiAnalysis || null,
       aiRawResponse: entry.aiRawResponse || null,
@@ -343,6 +525,7 @@ export const AppDataProvider = ({ children }) => {
       weight: petInput.weight || 'Chưa rõ',
       gender: petInput.gender || 'Chưa rõ',
       species: petInput.species || 'other',
+      speciesDetail: petInput.speciesDetail || '',
       imageUrl:
         petInput.imageUrl ||
         'https://images.unsplash.com/photo-1450778869180-41d0601e046e?q=80&w=400&auto=format&fit=crop',
@@ -391,6 +574,26 @@ export const AppDataProvider = ({ children }) => {
     }
 
     return nextPet;
+  };
+
+  const deletePet = (petId) => {
+    if (!petId || !currentUserId) return false;
+
+    let removed = false;
+    setPets((prev) => {
+      const nextPets = prev.filter((pet) => pet.id !== petId);
+      removed = nextPets.length !== prev.length;
+      return nextPets;
+    });
+
+    if (!removed) return false;
+
+    deleteDocument(petsCollectionPath, petId).catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to delete pet:', error);
+    });
+
+    return true;
   };
 
   const updateProfileOverview = (profileInput) => {
@@ -556,6 +759,7 @@ export const AppDataProvider = ({ children }) => {
       id: makeId('rem'),
       title: reminderInput.title,
       time: reminderInput.time,
+      date: reminderInput.date || '',
       repeat: reminderInput.repeat || 'Thứ 2, Thứ 3, Thứ 4, Thứ 5, Thứ 6',
       pet: reminderInput.pet || 'Tất cả',
       petId: reminderInput.petId || null,
@@ -565,22 +769,24 @@ export const AppDataProvider = ({ children }) => {
       createdAt: Date.now()
     };
 
-    let nextItems = [];
-    let nextSummary = DEFAULT_APP_CONFIG.reminderSummary;
-    setAppConfig((prev) => {
-      const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
-      nextItems = sortByCreatedAtDesc([nextReminder, ...currentItems]);
-      nextSummary = {
-        ...(prev.reminderSummary || DEFAULT_APP_CONFIG.reminderSummary),
-        count: nextItems.length
-      };
+    const currentItems = Array.isArray(reminderItemsRef.current)
+      ? reminderItemsRef.current
+      : Array.isArray(appConfig.reminderItems)
+        ? appConfig.reminderItems
+        : [];
+    const nextItems = sortByCreatedAtDesc([nextReminder, ...currentItems]);
+    const nextSummary = {
+      ...(appConfig.reminderSummary || DEFAULT_APP_CONFIG.reminderSummary),
+      count: nextItems.length
+    };
 
-      return {
-        ...prev,
-        reminderItems: nextItems,
-        reminderSummary: nextSummary
-      };
-    });
+    reminderItemsRef.current = nextItems;
+
+    setAppConfig((prev) => ({
+      ...prev,
+      reminderItems: nextItems,
+      reminderSummary: nextSummary
+    }));
 
     try {
       await setDocument(appConfigCollectionPath, 'main', {
@@ -592,20 +798,20 @@ export const AppDataProvider = ({ children }) => {
       // eslint-disable-next-line no-console
       console.error('Failed to create reminder:', error);
 
-      setAppConfig((prev) => {
-        const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
-        const rolledBackItems = currentItems.filter((item) => item.id !== nextReminder.id);
-        const rolledBackSummary = {
-          ...(prev.reminderSummary || DEFAULT_APP_CONFIG.reminderSummary),
-          count: rolledBackItems.length
-        };
+      const rolledBackItems = (Array.isArray(reminderItemsRef.current) ? reminderItemsRef.current : [])
+        .filter((item) => item.id !== nextReminder.id);
+      const rolledBackSummary = {
+        ...(appConfig.reminderSummary || DEFAULT_APP_CONFIG.reminderSummary),
+        count: rolledBackItems.length
+      };
 
-        return {
-          ...prev,
-          reminderItems: rolledBackItems,
-          reminderSummary: rolledBackSummary
-        };
-      });
+      reminderItemsRef.current = rolledBackItems;
+
+      setAppConfig((prev) => ({
+        ...prev,
+        reminderItems: rolledBackItems,
+        reminderSummary: rolledBackSummary
+      }));
 
       return {
         reminder: null,
@@ -620,36 +826,35 @@ export const AppDataProvider = ({ children }) => {
       notificationScheduled = Array.isArray(notificationIds) && notificationIds.length > 0;
 
       const safeNotificationIds = Array.isArray(notificationIds) ? notificationIds : [];
-
-      let syncedItems = [];
-      setAppConfig((prev) => {
-        const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
-        const updatedReminder = {
-          ...nextReminder,
-          notificationIds: safeNotificationIds,
-          calendarEventId: '',
-          updatedAt: Date.now()
-        };
-        const index = currentItems.findIndex((item) => item.id === nextReminder.id);
-
-        if (index >= 0) {
-          syncedItems = currentItems.map((item) =>
+      const baseItems = Array.isArray(reminderItemsRef.current)
+        ? reminderItemsRef.current
+        : Array.isArray(appConfig.reminderItems)
+          ? appConfig.reminderItems
+          : [];
+      const updatedReminder = {
+        ...nextReminder,
+        notificationIds: safeNotificationIds,
+        calendarEventId: '',
+        updatedAt: Date.now()
+      };
+      const index = baseItems.findIndex((item) => item.id === nextReminder.id);
+      const syncedItems = index >= 0
+        ? baseItems.map((item) =>
             item.id === nextReminder.id
               ? {
                   ...item,
                   ...updatedReminder
                 }
               : item
-          );
-        } else {
-          syncedItems = sortByCreatedAtDesc([updatedReminder, ...currentItems]);
-        }
+          )
+        : sortByCreatedAtDesc([updatedReminder, ...baseItems]);
 
-        return {
-          ...prev,
-          reminderItems: syncedItems
-        };
-      });
+      reminderItemsRef.current = syncedItems;
+
+      setAppConfig((prev) => ({
+        ...prev,
+        reminderItems: syncedItems
+      }));
 
       setDocument(appConfigCollectionPath, 'main', {
         reminderItems: syncedItems,
@@ -672,23 +877,26 @@ export const AppDataProvider = ({ children }) => {
   const toggleReminderEnabled = (reminderId) => {
     if (!reminderId || !currentUserId) return null;
 
-    let nextItems = [];
+    const currentItems = Array.isArray(reminderItemsRef.current)
+      ? reminderItemsRef.current
+      : [];
     let nextReminder = null;
     let previousReminder = null;
-    setAppConfig((prev) => {
-      const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
-      nextItems = currentItems.map((item) => {
-        if (item.id !== reminderId) return item;
-        previousReminder = item;
-        nextReminder = { ...item, enabled: !item.enabled, updatedAt: Date.now() };
-        return nextReminder;
-      });
-
-      return {
-        ...prev,
-        reminderItems: nextItems
-      };
+    const nextItems = currentItems.map((item) => {
+      if (item.id !== reminderId) return item;
+      previousReminder = item;
+      nextReminder = { ...item, enabled: !item.enabled, updatedAt: Date.now() };
+      return nextReminder;
     });
+
+    if (!nextReminder) return null;
+
+    reminderItemsRef.current = nextItems;
+
+    setAppConfig((prev) => ({
+      ...prev,
+      reminderItems: nextItems
+    }));
 
     setDocument(appConfigCollectionPath, 'main', {
       reminderItems: nextItems,
@@ -698,31 +906,32 @@ export const AppDataProvider = ({ children }) => {
       console.error('Failed to toggle reminder:', error);
     });
 
-    if (!nextReminder) return null;
-
     const previousNotificationIds = Array.isArray(previousReminder?.notificationIds)
       ? previousReminder.notificationIds
       : [];
     const applyReminderChannels = ({ notificationIds }) => {
-      let syncedItems = [];
-      setAppConfig((prev) => {
-        const currentItems = Array.isArray(prev.reminderItems) ? prev.reminderItems : [];
-        syncedItems = currentItems.map((item) =>
-          item.id === reminderId
-            ? {
-                ...item,
-                notificationIds: Array.isArray(notificationIds) ? notificationIds : item.notificationIds || [],
-                calendarEventId: '',
-                updatedAt: Date.now()
-              }
-            : item
-        );
+      const baseItems = Array.isArray(reminderItemsRef.current)
+        ? reminderItemsRef.current
+        : Array.isArray(appConfig.reminderItems)
+          ? appConfig.reminderItems
+          : [];
+      const syncedItems = baseItems.map((item) =>
+        item.id === reminderId
+          ? {
+              ...item,
+              notificationIds: Array.isArray(notificationIds) ? notificationIds : item.notificationIds || [],
+              calendarEventId: '',
+              updatedAt: Date.now()
+            }
+          : item
+      );
 
-        return {
-          ...prev,
-          reminderItems: syncedItems
-        };
-      });
+      reminderItemsRef.current = syncedItems;
+
+      setAppConfig((prev) => ({
+        ...prev,
+        reminderItems: syncedItems
+      }));
 
       setDocument(appConfigCollectionPath, 'main', {
         reminderItems: syncedItems,
@@ -1011,6 +1220,9 @@ export const AppDataProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       ...appConfig,
+      nearbyServices: nearbyServicesCache,
+      nearbyServicesMeta,
+      refreshNearbyServices,
       petsCollectionName: petsCollectionPath,
       journalCollectionName: journalCollectionPath,
       pets,
@@ -1022,6 +1234,7 @@ export const AppDataProvider = ({ children }) => {
       deleteJournalEntry,
       addPet,
       updatePet,
+      deletePet,
       addPetVaccination,
       updatePetVaccination,
       deletePetVaccination,
@@ -1037,6 +1250,9 @@ export const AppDataProvider = ({ children }) => {
     }),
     [
       appConfig,
+      nearbyServicesCache,
+      nearbyServicesMeta,
+      refreshNearbyServices,
       petsCollectionPath,
       journalCollectionPath,
       pets,

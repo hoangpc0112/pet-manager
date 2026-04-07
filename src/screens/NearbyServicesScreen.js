@@ -1,74 +1,10 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import Screen from '../components/Screen';
 import Card from '../components/Card';
 import theme from '../theme';
 import { useAppData } from '../context/AppDataContext';
-import { fetchNearbyServicesByLocation, getSeedNearbyServicesByLocation } from '../services/nearbyServices';
-
-const MAX_VISIBLE_DISTANCE_METERS = 100000;
-const BLOCKED_SERVICE_KEYWORDS = ['petrolimex'];
-
-const toDistanceMeters = (place) => {
-  if (Number.isFinite(place?.distanceMeters)) {
-    return place.distanceMeters;
-  }
-
-  const distanceText = String(place?.distance || '').trim().toLowerCase();
-  const distanceValue = Number.parseFloat(distanceText.replace(',', '.'));
-  if (!Number.isFinite(distanceValue)) return Number.POSITIVE_INFINITY;
-
-  if (distanceText.includes('km')) return distanceValue * 1000;
-  if (distanceText.includes('m')) return distanceValue;
-
-  return Number.POSITIVE_INFINITY;
-};
-
-const isBlockedService = (place) => {
-  const haystack = [place?.name, place?.operator, place?.address]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  return BLOCKED_SERVICE_KEYWORDS.some((keyword) => haystack.includes(keyword));
-};
-
-const filterVisibleServices = (places) =>
-  (Array.isArray(places) ? places : []).filter(
-    (place) => toDistanceMeters(place) < MAX_VISIBLE_DISTANCE_METERS && !isBlockedService(place)
-  );
-
-const getCoordinatesWithTimeout = async (timeoutMs = 12000) => {
-  const timeoutPromise = new Promise((_, reject) => {
-    const timeoutHandle = setTimeout(() => {
-      clearTimeout(timeoutHandle);
-      reject(new Error('Location timeout'));
-    }, timeoutMs);
-  });
-
-  const locationPromise = (async () => {
-    const lastKnown = await Location.getLastKnownPositionAsync();
-    if (lastKnown?.coords?.latitude && lastKnown?.coords?.longitude) {
-      return {
-        latitude: lastKnown.coords.latitude,
-        longitude: lastKnown.coords.longitude
-      };
-    }
-
-    const current = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced
-    });
-
-    return {
-      latitude: current?.coords?.latitude,
-      longitude: current?.coords?.longitude
-    };
-  })();
-
-  return Promise.race([locationPromise, timeoutPromise]);
-};
 
 const getServiceIcon = (type) => {
   if (type === 'Thú y') return 'medkit';
@@ -86,103 +22,12 @@ const formatRatingText = (place) => {
   return String(place.rating);
 };
 
-const buildSourceSummary = (places) => {
-  const sources = Array.from(new Set((places || []).map((item) => item?.source).filter(Boolean)));
-  if (sources.length === 0) return 'Theo vị trí GPS của bạn';
-  return `Nguồn miễn phí: ${sources.join(', ')}`;
-};
-
 const NearbyServicesScreen = ({ navigation }) => {
-  const { nearbyServices } = useAppData();
-  const appConfigServices = useMemo(() => (Array.isArray(nearbyServices) ? nearbyServices : []), [nearbyServices]);
-
-  const [services, setServices] = useState([]);
-  const [isLocating, setIsLocating] = useState(true);
-  const [locationError, setLocationError] = useState('');
-  const [sourceLabel, setSourceLabel] = useState('');
-
-  const loadNearbyServices = useCallback(async () => {
-    setIsLocating(true);
-    setLocationError('');
-    let fallbackLocation = null;
-
-    try {
-      const serviceEnabled = await Location.hasServicesEnabledAsync();
-      if (!serviceEnabled) {
-        setLocationError('Dịch vụ vị trí trên iPhone đang tắt. Hiển thị dữ liệu gợi ý gần bạn.');
-
-        if (appConfigServices.length > 0) {
-          setServices(filterVisibleServices(appConfigServices));
-          setSourceLabel('Dữ liệu cấu hình ứng dụng');
-        } else {
-          setServices(filterVisibleServices(getSeedNearbyServicesByLocation(null)));
-          setSourceLabel('Dữ liệu mặc định');
-        }
-        return;
-      }
-
-      let permission = await Location.getForegroundPermissionsAsync();
-      if (permission.status !== 'granted') {
-        permission = await Location.requestForegroundPermissionsAsync();
-      }
-
-      if (permission.status !== 'granted') {
-        setLocationError('Chưa được cấp quyền vị trí. Vào Cài đặt để cấp quyền khi dùng ứng dụng.');
-
-        if (appConfigServices.length > 0) {
-          setServices(filterVisibleServices(appConfigServices));
-          setSourceLabel('Dữ liệu cấu hình ứng dụng');
-        } else {
-          setServices(filterVisibleServices(getSeedNearbyServicesByLocation(null)));
-          setSourceLabel('Dữ liệu mặc định');
-        }
-        return;
-      }
-
-      const coords = await getCoordinatesWithTimeout(12000);
-      const latitude = coords?.latitude;
-      const longitude = coords?.longitude;
-
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        throw new Error('Invalid GPS coordinates');
-      }
-
-      fallbackLocation = { latitude, longitude };
-
-      const remoteServices = await fetchNearbyServicesByLocation({
-        latitude,
-        longitude,
-        radiusMeters: 5000,
-        maxResults: 15
-      });
-      const filteredRemoteServices = filterVisibleServices(remoteServices);
-
-      if (filteredRemoteServices.length > 0) {
-        setServices(filteredRemoteServices);
-        setSourceLabel(buildSourceSummary(filteredRemoteServices));
-        return;
-      }
-
-      setServices(filterVisibleServices(getSeedNearbyServicesByLocation({ latitude, longitude })));
-      setSourceLabel('Dữ liệu mặc định theo vị trí hiện tại');
-    } catch (_error) {
-      setLocationError('Không lấy được vị trí hoặc dữ liệu mạng lúc này. Đã chuyển sang dữ liệu dự phòng.');
-
-      if (appConfigServices.length > 0) {
-        setServices(filterVisibleServices(appConfigServices));
-        setSourceLabel('Dữ liệu cấu hình ứng dụng');
-      } else {
-        setServices(filterVisibleServices(getSeedNearbyServicesByLocation(fallbackLocation)));
-        setSourceLabel(fallbackLocation ? 'Dữ liệu mặc định theo vị trí hiện tại' : 'Dữ liệu mặc định');
-      }
-    } finally {
-      setIsLocating(false);
-    }
-  }, [appConfigServices]);
-
-  useEffect(() => {
-    loadNearbyServices();
-  }, [loadNearbyServices]);
+  const { nearbyServices, nearbyServicesMeta, refreshNearbyServices } = useAppData();
+  const services = Array.isArray(nearbyServices) ? nearbyServices : [];
+  const isLocating = nearbyServicesMeta?.isLoading;
+  const locationError = nearbyServicesMeta?.error || '';
+  const sourceLabel = nearbyServicesMeta?.sourceLabel || '';
 
   return (
     <Screen contentContainerStyle={styles.container}>
@@ -199,7 +44,10 @@ const NearbyServicesScreen = ({ navigation }) => {
       {locationError ? (
         <Card style={styles.noticeCard}>
           <Text style={styles.noticeText}>{locationError}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadNearbyServices}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => refreshNearbyServices({ force: true })}
+          >
             <Text style={styles.retryButtonText}>Thử lại</Text>
           </TouchableOpacity>
         </Card>
@@ -256,7 +104,10 @@ const NearbyServicesScreen = ({ navigation }) => {
       {!isLocating && services.length === 0 ? (
         <Card style={styles.noticeCard}>
           <Text style={styles.noticeText}>Chưa tìm thấy địa điểm phù hợp gần vị trí hiện tại.</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadNearbyServices}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => refreshNearbyServices({ force: true })}
+          >
             <Text style={styles.retryButtonText}>Tìm lại</Text>
           </TouchableOpacity>
         </Card>

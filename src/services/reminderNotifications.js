@@ -31,6 +31,36 @@ const parseTimeToParts = (timeText) => {
   };
 };
 
+const parseDateToParts = (dateText) => {
+  if (!dateText || typeof dateText !== 'string') return null;
+  const parts = dateText.split('/').map((item) => Number.parseInt(item, 10));
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const [day, month, year] = parts;
+  return { day, month, year };
+};
+
+const buildNextTriggerDate = (timeText, dateText) => {
+  const { hour, minute } = parseTimeToParts(timeText);
+  const now = new Date();
+  const dateParts = parseDateToParts(dateText);
+  const nextDate = dateParts
+    ? new Date(dateParts.year, dateParts.month - 1, dateParts.day)
+    : new Date(now);
+
+  nextDate.setHours(hour, minute, 0, 0);
+
+  if (!dateParts && nextDate.getTime() <= now.getTime()) {
+    nextDate.setDate(nextDate.getDate() + 1);
+  }
+
+  return nextDate;
+};
+
+const isNonRepeating = (repeatText) => {
+  const text = String(repeatText || '').toLowerCase();
+  return text.includes('khong lap lai') || text.includes('không lặp lại') || text.includes('mot lan') || text.includes('một lần');
+};
+
 const parseWeekdayTriggers = (repeatText) => {
   const text = String(repeatText || '').toLowerCase();
   const regex = /thứ\s*(\d)/g;
@@ -45,10 +75,15 @@ const parseWeekdayTriggers = (repeatText) => {
     match = regex.exec(text);
   }
 
+  if (text.includes('chủ nhật') || text.includes('chu nhat')) {
+    weekdays.push(8);
+  }
+
   const unique = Array.from(new Set(weekdays));
   if (unique.length === 0) return [];
 
   return unique.map((vnWeekday) => {
+    if (vnWeekday === 8) return 7;
     // Expo notifications weekday in this app should be mapped as Monday=1 ... Sunday=7.
     // Vietnamese labels are Thu 2..Thu 7 (Monday..Saturday), so shift by -1.
     return vnWeekday - 1;
@@ -94,6 +129,18 @@ export const scheduleReminderNotifications = async (reminder) => {
   const { hour, minute } = parseTimeToParts(reminder?.time);
   const content = getReminderContent(reminder);
   const repeatText = String(reminder?.repeat || '').toLowerCase();
+
+  if (isNonRepeating(repeatText)) {
+    const triggerDate = buildNextTriggerDate(reminder?.time, reminder?.date);
+    if (triggerDate.getTime() <= Date.now()) return [];
+
+    const id = await Notifications.scheduleNotificationAsync({
+      content,
+      trigger: triggerDate
+    });
+
+    return id ? [id] : [];
+  }
 
   const weekdayTriggers = parseWeekdayTriggers(repeatText);
   if (weekdayTriggers.length > 0) {

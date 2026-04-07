@@ -120,7 +120,7 @@ const RemindersScreen = ({ navigation, route }) => {
           <View style={styles.row}>
             <View style={styles.reminderInfo}>
               <Text style={styles.reminderTitle}>{item.title}</Text>
-              <Text style={styles.reminderMeta}>{item.pet} • {item.repeat}</Text>
+              <Text style={styles.reminderMeta}>{[item.pet, item.date, item.repeat].filter(Boolean).join(' • ')}</Text>
             </View>
             <View style={styles.rowActions}>
               <TouchableOpacity style={styles.smallAction} onPress={() => handleDeleteReminder(item)}>

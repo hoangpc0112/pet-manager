@@ -5,6 +5,9 @@ const OVERPASS_ENDPOINTS = [
 const PHOTON_ENDPOINT = 'https://photon.komoot.io/api';
 const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 
+const MAX_VISIBLE_DISTANCE_METERS = 100000;
+const BLOCKED_SERVICE_KEYWORDS = ['petrolimex'];
+
 const LOCAL_SERVICE_SEEDS = [
   {
     id: 'seed-hcm-vet-1',
@@ -79,6 +82,51 @@ const formatDistance = (meters) => {
   if (!Number.isFinite(meters) || meters < 0) return 'Chưa rõ khoảng cách';
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
+};
+
+const toDistanceMeters = (place) => {
+  if (Number.isFinite(place?.distanceMeters)) {
+    return place.distanceMeters;
+  }
+
+  const distanceText = String(place?.distance || '').trim().toLowerCase();
+  const distanceValue = Number.parseFloat(distanceText.replace(',', '.'));
+  if (!Number.isFinite(distanceValue)) return Number.POSITIVE_INFINITY;
+
+  if (distanceText.includes('km')) return distanceValue * 1000;
+  if (distanceText.includes('m')) return distanceValue;
+
+  return Number.POSITIVE_INFINITY;
+};
+
+const isBlockedService = (place) => {
+  const haystack = [place?.name, place?.operator, place?.address]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return BLOCKED_SERVICE_KEYWORDS.some((keyword) => haystack.includes(keyword));
+};
+
+export const filterVisibleServices = (places, options = {}) => {
+  const maxDistanceMeters = Number.isFinite(options.maxDistanceMeters)
+    ? options.maxDistanceMeters
+    : MAX_VISIBLE_DISTANCE_METERS;
+  const blockedKeywords = Array.isArray(options.blockedKeywords) && options.blockedKeywords.length > 0
+    ? options.blockedKeywords
+    : BLOCKED_SERVICE_KEYWORDS;
+
+  return (Array.isArray(places) ? places : []).filter((place) => {
+    const distanceMeters = toDistanceMeters(place);
+    if (distanceMeters >= maxDistanceMeters) return false;
+
+    const haystack = [place?.name, place?.operator, place?.address]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return !blockedKeywords.some((keyword) => haystack.includes(keyword));
+  });
 };
 
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 12000) => {

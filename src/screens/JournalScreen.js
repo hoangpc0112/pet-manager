@@ -93,7 +93,7 @@ const JournalScreen = ({ navigation }) => {
     setCurrentPage((prev) => Math.min(prev, totalPages));
     pageDataCacheRef.current = {};
     pageStartCursorRef.current = { 1: null };
-  }, [journalEntries.length, selectedPetFilter, totalPages]);
+  }, [journalEntries, selectedPetFilter, totalPages]);
 
   const loadPage = async (targetPage) => {
     if (pageDataCacheRef.current[targetPage]) {
@@ -162,7 +162,7 @@ const JournalScreen = ({ navigation }) => {
   }, [
     currentPage,
     journalCollectionName,
-    journalEntries.length,
+    journalEntries,
     selectedPetFilter,
     filteredEntries.length,
     filteredPageEntries
